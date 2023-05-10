@@ -5,11 +5,6 @@ import (
 
 	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"fmt"
-	"os"
-	"strconv"
-	"time"
-
 	apiregistration "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
 	nodeapi "k8s.io/kubernetes/pkg/apis/node"
 
@@ -103,7 +98,7 @@ func NewKoffCommand() *KoffCommand {
 	return koff
 }
 
-func rawObjectToRuntimeObject(rawObject []byte, schema *runtime.Scheme) runtime.Object {
+func RawObjectToRuntimeObject(rawObject []byte, schema *runtime.Scheme) runtime.Object {
 	codec := serializer.NewCodecFactory(schema)
 	decode := codec.UniversalDeserializer()
 	obj, _, err := decode.Decode([]byte(rawObject), nil, nil)
@@ -248,72 +243,4 @@ func rawObjectToRuntimeObject(rawObject []byte, schema *runtime.Scheme) runtime.
 	}
 	//fmt.Println("RUNTIME UNKNOW")
 	return &runtime.Unknown{}
-}
-
-func GetAge(resourcefilePath string, resourceCreationTimeStamp metav1.Time) string {
-	ResourceFile, _ := os.Stat(resourcefilePath)
-	t2 := ResourceFile.ModTime()
-	diffTime := t2.Sub(resourceCreationTimeStamp.Time).String()
-	d, _ := time.ParseDuration(diffTime)
-	return FormatDiffTime(d)
-
-}
-func translateTimestamp(timestamp metav1.Time) string {
-	if timestamp.IsZero() {
-		return "<unknown>"
-	}
-	return ShortHumanDuration(time.Now().Sub(timestamp.Time))
-}
-func ShortHumanDuration(d time.Duration) string {
-	// Allow deviation no more than 2 seconds(excluded) to tolerate machine time
-	// inconsistence, it can be considered as almost now.
-	if seconds := int(d.Seconds()); seconds < -1 {
-		return fmt.Sprintf("<invalid>")
-	} else if seconds < 0 {
-		return fmt.Sprintf("0s")
-	} else if seconds < 60 {
-		return fmt.Sprintf("%ds", seconds)
-	} else if minutes := int(d.Minutes()); minutes < 60 {
-		return fmt.Sprintf("%dm", minutes)
-	} else if hours := int(d.Hours()); hours < 24 {
-		return fmt.Sprintf("%dh", hours)
-	} else if hours < 24*365 {
-		return fmt.Sprintf("%dd", hours/24)
-	}
-	return fmt.Sprintf("%dy", int(d.Hours()/24/365))
-}
-
-func FormatDiffTime(diff time.Duration) string {
-	if diff.Hours() > 48 {
-		if diff.Hours() > 200000 {
-			return "Unknown"
-		}
-		return strconv.Itoa(int(diff.Hours()/24)) + "d"
-	}
-	if diff.Hours() < 48 && diff.Hours() > 10 {
-		var h float64
-		h = diff.Minutes() / 60
-		return strconv.Itoa(int(h)) + "h"
-	}
-	if diff.Minutes() > 60 {
-		var hours float64
-		hours = diff.Minutes() / 60
-		remainMinutes := int(diff.Minutes()) % 60
-		if remainMinutes > 0 {
-			return strconv.Itoa(int(hours)) + "h" + strconv.Itoa(remainMinutes) + "m"
-		}
-		return strconv.Itoa(int(hours)) + "h"
-
-	}
-	if diff.Seconds() > 60 {
-		var minutes float64
-		minutes = diff.Seconds() / 60
-		remainSeconds := int(diff.Seconds()) % 60
-		if remainSeconds > 0 && diff.Minutes() < 4 {
-			return strconv.Itoa(int(minutes)) + "m" + strconv.Itoa(remainSeconds) + "s"
-		}
-		return strconv.Itoa(int(minutes)) + "m"
-
-	}
-	return strconv.Itoa(int(diff.Seconds())) + "s"
 }

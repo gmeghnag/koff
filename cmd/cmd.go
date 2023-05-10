@@ -24,6 +24,7 @@ import (
 	"os/user"
 	"path/filepath"
 
+	"github.com/gmeghnag/koff/pkg/tablegenerator"
 	"github.com/gmeghnag/koff/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -67,10 +68,10 @@ var RootCmd = &cobra.Command{
 				os.Exit(1)
 			}
 			for _, unstructuredObject := range unstructuredList.Items {
-				Koff.HandleObject(unstructuredObject)
+				HandleObject(Koff, unstructuredObject)
 			}
 		} else {
-			Koff.HandleObject(*unstructuredObject)
+			HandleObject(Koff, *unstructuredObject)
 		}
 		if Koff.LastObj.GetObjectKind().GroupVersionKind().Kind == Koff.CurrentKind {
 			//printer := cliprint.NewTablePrinter(cliprint.PrintOptions{NoHeaders: false, Wide: false, WithNamespace: false})
@@ -109,5 +110,53 @@ func initConfig() {
 			fmt.Println(err)
 			os.Exit(1)
 		}
+	}
+}
+
+func HandleObject(Koff *types.KoffCommand, obj unstructured.Unstructured) {
+	Koff.LastObj = obj
+	rawObject, err := yaml.Marshal(obj.Object)
+	if err != nil {
+		log.Printf("Error: %s\n", err)
+		os.Exit(1)
+	}
+
+	// INIZIO
+	// objectTable :=Koff.rawObjectToTable(rawObject, obj)
+	RuntimeObjectType := types.RawObjectToRuntimeObject(rawObject, Koff.Schema)
+	if err := yaml.Unmarshal([]byte(rawObject), RuntimeObjectType); err != nil {
+		//log.Printf(".... Error: %s\n", err)
+	}
+	objectTable, err := tablegenerator.InternalResourceTable(Koff, RuntimeObjectType, &obj)
+	if err != nil {
+		// printer for the object is not registered or is a crd
+		//log.printf fmt.Println(err, unstruct.GetKind(), unstruct.GetAPIVersion())
+		objectTable, err = tablegenerator.GenerateCustomResourceTable(Koff, obj)
+		if err != nil {
+			objectTable = tablegenerator.UndefinedResourceTable(Koff, obj)
+
+		}
+
+	}
+	// END
+	// se l'oggetto è uguale a quello precedente
+	// non printo newTable e non aggiungo ColumnDefinitions
+	if Koff.CurrentKind == obj.GetObjectKind().GroupVersionKind().Kind {
+		Koff.Table.Rows = append(Koff.Table.Rows, objectTable.Rows...)
+	} else {
+		// printo la tabella dell'oggetto precedente
+		printer := cliprint.NewTablePrinter(cliprint.PrintOptions{NoHeaders: false, Wide: false, WithNamespace: false})
+		err = printer.PrintObj(&Koff.Table, &Koff.Test)
+		if err != nil {
+			log.Printf("Error: %s\n", err)
+			os.Exit(1)
+		}
+		if Koff.CurrentKind != "" {
+			Koff.Test.WriteByte('\n')
+		}
+		Koff.CurrentKind = obj.GetObjectKind().GroupVersionKind().Kind
+		Koff.Table = metav1.Table{}
+		Koff.Table.ColumnDefinitions = append(Koff.Table.ColumnDefinitions, objectTable.ColumnDefinitions...)
+		Koff.Table.Rows = append(Koff.Table.Rows, objectTable.Rows...)
 	}
 }
