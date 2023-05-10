@@ -24,30 +24,28 @@ import (
 	"os/user"
 	"path/filepath"
 
+	"github.com/gmeghnag/koff/pkg/deserializer"
 	"github.com/gmeghnag/koff/pkg/tablegenerator"
 	"github.com/gmeghnag/koff/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	cliprint "k8s.io/cli-runtime/pkg/printers"
 	klog "k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
-
-	cliprint "k8s.io/cli-runtime/pkg/printers"
 )
 
 var dataIn []byte
 var Koff = types.NewKoffCommand()
 
-// rootCmd represents the base command when called without any subcommands
 var RootCmd = &cobra.Command{
 	Use: "koff",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		//printr := cliprint.NewTablePrinter(cliprint.PrintOptions{NoHeaders: false, Wide: false, WithNamespace: false, ShowLabels: false})
-		printer := cliprint.NewTablePrinter(cliprint.PrintOptions{NoHeaders: false, Wide: false, WithNamespace: false})
-		Koff.ShowNamespace = true
-		if len(os.Args) > 1 {
-			yamFile := os.Args[1]
+		printer := cliprint.NewTablePrinter(cliprint.PrintOptions{NoHeaders: Koff.NoHeaders, Wide: Koff.Wide, WithNamespace: false})
+		if len(args) > 1 {
+			yamFile := args[0]
 			dataIn, _ = ioutil.ReadFile(yamFile)
 		} else {
 			infile := os.Stdin
@@ -73,24 +71,27 @@ var RootCmd = &cobra.Command{
 		} else {
 			HandleObject(Koff, *unstructuredObject)
 		}
-		if Koff.LastObj.GetObjectKind().GroupVersionKind().Kind == Koff.CurrentKind {
+		if Koff.LastKind == Koff.CurrentKind {
 			//printer := cliprint.NewTablePrinter(cliprint.PrintOptions{NoHeaders: false, Wide: false, WithNamespace: false})
-			//err = printer.PrintObj(&Koff.Table, &Koff.Test)
-			err = printer.PrintObj(&Koff.Table, &Koff.Test)
+			//err = printer.PrintObj(&Koff.Table, &Koff.Output)
+			err = printer.PrintObj(&Koff.Table, &Koff.Output)
 			if err != nil {
 				log.Printf("Error: %s\n", err)
 				os.Exit(1)
 			}
 			Koff.Table = metav1.Table{}
 		}
-		Koff.Test.WriteTo(os.Stdout)
+		Koff.Output.WriteTo(os.Stdout)
 		return nil
 	},
 }
 
 func init() {
 	cobra.OnInitialize(initConfig)
-	RootCmd.Flags().BoolVar(&Koff.ShowKind, "show-kind", Koff.ShowKind, "Show kind")
+	RootCmd.Flags().BoolVarP(&Koff.ShowKind, "show-kind", "K", Koff.ShowKind, "Show kind.")
+	RootCmd.Flags().BoolVarP(&Koff.ShowNamespace, "show-namespace", "N", Koff.ShowNamespace, "Show namespace.")
+	RootCmd.Flags().BoolVar(&Koff.Wide, "wide", Koff.Wide, "Show wide output.")
+	RootCmd.Flags().BoolVar(&Koff.NoHeaders, "no-headers", Koff.NoHeaders, "Hide headers.")
 	RootCmd.Flags().SortFlags = false
 	klog.InitFlags(nil)
 	pflag.CommandLine.AddGoFlag(flag.CommandLine.Lookup("v"))
@@ -114,7 +115,7 @@ func initConfig() {
 }
 
 func HandleObject(Koff *types.KoffCommand, obj unstructured.Unstructured) {
-	Koff.LastObj = obj
+	Koff.LastKind = obj.GetKind()
 	rawObject, err := yaml.Marshal(obj.Object)
 	if err != nil {
 		log.Printf("Error: %s\n", err)
@@ -123,17 +124,20 @@ func HandleObject(Koff *types.KoffCommand, obj unstructured.Unstructured) {
 
 	// INIZIO
 	// objectTable :=Koff.rawObjectToTable(rawObject, obj)
-	RuntimeObjectType := types.RawObjectToRuntimeObject(rawObject, Koff.Schema)
-	if err := yaml.Unmarshal([]byte(rawObject), RuntimeObjectType); err != nil {
+	runtimeObjectType := deserializer.RawObjectToRuntimeObject(rawObject, Koff.Schema)
+	if err := yaml.Unmarshal([]byte(rawObject), runtimeObjectType); err != nil {
 		//log.Printf(".... Error: %s\n", err)
 	}
-	objectTable, err := tablegenerator.InternalResourceTable(Koff, RuntimeObjectType, &obj)
+	objectTable, err := tablegenerator.InternalResourceTable(Koff, runtimeObjectType, &obj)
 	if err != nil {
 		// printer for the object is not registered or is a crd
+
+		klog.V(3).Info("INFO ", fmt.Sprintf("%s: %s, %s", err.Error(), obj.GetKind(), obj.GetAPIVersion()))
 		//log.printf fmt.Println(err, unstruct.GetKind(), unstruct.GetAPIVersion())
 		objectTable, err = tablegenerator.GenerateCustomResourceTable(Koff, obj)
 		if err != nil {
-			objectTable = tablegenerator.UndefinedResourceTable(Koff, obj)
+			klog.V(1).Info("ERROR ", fmt.Sprintf("%s", err.Error()))
+			//objectTable = tablegenerator.UndefinedResourceTable(Koff, obj)
 
 		}
 
@@ -145,18 +149,16 @@ func HandleObject(Koff *types.KoffCommand, obj unstructured.Unstructured) {
 		Koff.Table.Rows = append(Koff.Table.Rows, objectTable.Rows...)
 	} else {
 		// printo la tabella dell'oggetto precedente
-		printer := cliprint.NewTablePrinter(cliprint.PrintOptions{NoHeaders: false, Wide: false, WithNamespace: false})
-		err = printer.PrintObj(&Koff.Table, &Koff.Test)
+		printer := cliprint.NewTablePrinter(cliprint.PrintOptions{NoHeaders: Koff.NoHeaders, Wide: Koff.Wide, WithNamespace: false})
+		err = printer.PrintObj(&Koff.Table, &Koff.Output)
 		if err != nil {
 			log.Printf("Error: %s\n", err)
 			os.Exit(1)
 		}
 		if Koff.CurrentKind != "" {
-			Koff.Test.WriteByte('\n')
+			Koff.Output.WriteByte('\n')
 		}
 		Koff.CurrentKind = obj.GetObjectKind().GroupVersionKind().Kind
-		Koff.Table = metav1.Table{}
-		Koff.Table.ColumnDefinitions = append(Koff.Table.ColumnDefinitions, objectTable.ColumnDefinitions...)
-		Koff.Table.Rows = append(Koff.Table.Rows, objectTable.Rows...)
+		Koff.Table = metav1.Table{ColumnDefinitions: objectTable.ColumnDefinitions, Rows: objectTable.Rows}
 	}
 }

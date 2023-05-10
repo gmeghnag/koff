@@ -127,6 +127,8 @@ func addAuthorizationTypes(scheme *runtime.Scheme) error {
 func addImageTypes(scheme *runtime.Scheme) error {
 	GroupVersion := schema.GroupVersion{Group: "image.openshift.io", Version: "v1"}
 	types := []runtime.Object{
+		&imagev1.Image{},
+		&imagev1.ImageTag{},
 		&imagev1.ImageStream{},
 		&imagev1.ImageStreamTag{},
 	}

@@ -1,4 +1,4 @@
-package types
+package deserializer
 
 // specific labels https://github.com/seans3/kubernetes/blob/6108dac6708c026b172f3928e137c206437791da/pkg/printers/internalversion/printers_test.go#L1979
 import (
@@ -28,8 +28,6 @@ import (
 	//runtime "k8s.io/apimachinery/pkg/runtime"
 	//utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"github.com/openshift/openshift-apiserver/pkg/build/apis/build"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 
 	//core "k8s.io/kubernetes/pkg/apis/core"
@@ -39,7 +37,6 @@ import (
 
 	// cliprint "k8s.io/cli-runtime/pkg/printers"
 	runtime "k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
 	//
 	admissionregistration "k8s.io/kubernetes/pkg/apis/admissionregistration"
@@ -54,49 +51,6 @@ import (
 	resource "k8s.io/kubernetes/pkg/apis/resource"
 	scheduling "k8s.io/kubernetes/pkg/apis/scheduling"
 )
-
-func (Koff *KoffCommand) InitializeSchema() {
-	Koff.Schema = runtime.NewScheme()
-	schemeBuilder := runtime.SchemeBuilder{
-		metav1beta1.AddMetaToScheme,
-		corev1.AddToScheme,
-		apiregistration.AddToScheme,
-	}
-
-	_ = addAdmissionRegistrationTypes(Koff.Schema)
-	_ = addApiServerInternalTypes(Koff.Schema)
-	_ = addApiRegistrationTypes(Koff.Schema)
-	_ = addAppsTypes(Koff.Schema)
-	_ = addAppsV1Types(Koff.Schema)
-	_ = addAuthorizationTypes(Koff.Schema)
-	_ = addAutoscalingTypes(Koff.Schema)
-	_ = addBatchTypes(Koff.Schema)
-	_ = addBuildTypes(Koff.Schema)
-	_ = addCertificatesTypes(Koff.Schema)
-	_ = addCoordinationTypes(Koff.Schema)
-	_ = addDiscoveryTypes(Koff.Schema)
-	_ = addFlowControlTypes(Koff.Schema)
-	_ = addFlowControlV1B2Types(Koff.Schema)
-	_ = addImageTypes(Koff.Schema)
-	_ = addNetworkingTypes(Koff.Schema)
-	_ = addNodeTypes(Koff.Schema)
-	_ = addPolicyV1Types(Koff.Schema)
-	_ = addPolicyV1B1Types(Koff.Schema)
-	_ = addResourceV1A2Types(Koff.Schema)
-	_ = addRBACTypes(Koff.Schema)
-	_ = addSchedulingTypes(Koff.Schema)
-	_ = addStorageV1Types(Koff.Schema)
-	_ = addStorageV1B1Types(Koff.Schema)
-	utilruntime.Must(schemeBuilder.AddToScheme(Koff.Schema))
-}
-
-func NewKoffCommand() *KoffCommand {
-	koff := &KoffCommand{}
-	koff.InitializeSchema()
-	koff.InitializeTableGenerator()
-	koff.Table = metav1.Table{}
-	return koff
-}
 
 func RawObjectToRuntimeObject(rawObject []byte, schema *runtime.Scheme) runtime.Object {
 	codec := serializer.NewCodecFactory(schema)
@@ -192,10 +146,14 @@ func RawObjectToRuntimeObject(rawObject []byte, schema *runtime.Scheme) runtime.
 		return &flowcontrol.FlowSchema{}
 	case *flowcontrol.PriorityLevelConfiguration:
 		return &flowcontrol.PriorityLevelConfiguration{}
+	case *imagev1.Image:
+		return &imagev1.Image{}
 	case *imagev1.ImageStream:
 		return &imagev1.ImageStream{}
 	case *imagev1.ImageStreamTag:
 		return &imagev1.ImageStreamTag{}
+	case *imagev1.ImageTag:
+		return &imagev1.ImageTag{}
 	case *networking.ClusterCIDR:
 		return &networking.ClusterCIDR{}
 	case *networking.IPAddress:

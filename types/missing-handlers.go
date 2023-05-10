@@ -7,7 +7,7 @@ import (
 	"k8s.io/kubernetes/pkg/printers"
 )
 
-func AddKoffHandlers(h printers.PrintHandler) {
+func AddMissingHandlers(h printers.PrintHandler) {
 	apiServiceColumnDefinitions := []metav1.TableColumnDefinition{
 		{Name: "Name", Type: "string", Format: "name"},
 		{Name: "Service", Type: "string"},
