@@ -46,7 +46,7 @@ func upgradeBinary(repoName string) {
 	if DesiredVersion != "latest" {
 		desiredReleaseVer := semver.New(DesiredVersion[1:])
 		if vars.KoffTag == "" {
-			vars.KoffTag = "v2.0.1"
+			vars.KoffTag = "v0.9.1"
 		}
 		currentVer := semver.New(vars.KoffTag[1:])
 		if desiredReleaseVer.LessThan(*currentVer) {

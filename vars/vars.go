@@ -1,3 +1,3 @@
 package vars
 
-var KoffBundleRootPath, Namespace, Id, KoffTag string
+var KoffBundleRootPath, Namespace, Id, KoffTag, KoffHash string

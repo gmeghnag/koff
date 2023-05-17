@@ -131,6 +131,7 @@ func init() {
 		get.GetCmd,
 		UseCmd,
 		upgrade.Upgrade,
+		VersionCmd,
 	)
 }
 
