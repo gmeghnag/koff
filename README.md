@@ -1,12 +1,9 @@
-# `koff`: kube offine
----
-koff is a command-line tool that allows you to process kubernetes resources in yaml or json format, from either file or piped input.
-It reads input, performs the specific filter operations based on the flags and arguments (if provided), and writes the output in either tabular (as default), json or yaml format.
+# `koff`
 <img src="./docs/images/preview.png" width="100%">
-
+`koff` is a command-line tool that process kuberntes `yaml` manifests and return their appropriate tabular format, as well as `yaml` or `json`.
 
 ## **¿What?**
-`koff` is a command-line tool that allows you to process kubernetes resources in `yaml` or `json` format, from either file or piped input.<br />
+It allows you to process kubernetes resources in `yaml` or `json` format, from either file or piped input.<br />
 It reads input, performs the specific filter operations based on the flags and arguments (if provided), and writes the output in either tabular (as default), `json` or `yaml` format. 
 
 ## **¿Why?**
