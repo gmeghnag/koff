@@ -273,6 +273,86 @@ crds:
   name: customresourcedefinition
   namespaced: false
   plural: customresourcedefinitions
+project:
+  group: project.openshift.io
+  name: project
+  namespaced: false
+  plural: projects
+projects:
+  group: project.openshift.io
+  name: project
+  namespaced: false
+  plural: projects
+projectrequest:
+  group: project.openshift.io
+  name: projectrequest
+  namespaced: false
+  plural: projectrequests
+projectrequests:
+  group: project.openshift.io
+  name: projectrequest
+  namespaced: false
+  plural: projectrequests
+appliedclusterresourcequota:
+  group: quota.openshift.io
+  name: appliedclusterresourcequota
+  namespaced: true
+  plural: appliedclusterresourcequotas
+appliedclusterresourcequotas:
+  group: quota.openshift.io
+  name: appliedclusterresourcequota
+  namespaced: true
+  plural: appliedclusterresourcequotas
+route:
+  group: route.openshift.io
+  name: route
+  namespaced: true
+  plural: routes
+routes:
+  group: route.openshift.io
+  name: route
+  namespaced: true
+  plural: routes
+podsecuritypolicyreview:
+  group: security.openshift.io
+  name: podsecuritypolicyreview
+  namespaced: true
+  plural: podsecuritypolicyreviews
+podsecuritypolicyreviews:
+  group: security.openshift.io
+  name: podsecuritypolicyreview
+  namespaced: true
+  plural: podsecuritypolicyreviews
+podsecuritypolicyselfsubjectreview:
+  group: security.openshift.io
+  name: podsecuritypolicyselfsubjectreview
+  namespaced: true
+  plural: podsecuritypolicyselfsubjectreviews
+podsecuritypolicyselfsubjectreviews:
+  group: security.openshift.io
+  name: podsecuritypolicyselfsubjectreview
+  namespaced: true
+  plural: podsecuritypolicyselfsubjectreviews
+podsecuritypolicysubjectreview:
+  group: security.openshift.io
+  name: podsecuritypolicysubjectreview
+  namespaced: true
+  plural: podsecuritypolicysubjectreview
+podsecuritypolicysubjectreviews:
+  group: security.openshift.io
+  name: podsecuritypolicysubjectreview
+  namespaced: true
+  plural: podsecuritypolicysubjectreviews
+template:
+  group: template.openshift.io
+  name: template
+  namespaced: true
+  plural: templates
+templates:
+  group: template.openshift.io
+  name: template
+  namespaced: true
+  plural: templates
 apiservice:
   group: apiregistration.k8s.io
   name: apiservice

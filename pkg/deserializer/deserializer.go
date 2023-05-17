@@ -10,6 +10,7 @@ import (
 
 	appsv1 "github.com/openshift/openshift-apiserver/pkg/apps/apis/apps"
 	imagev1 "github.com/openshift/openshift-apiserver/pkg/image/apis/image"
+	"github.com/openshift/openshift-apiserver/pkg/project/apis/project"
 	corev1 "k8s.io/api/core/v1"
 
 	authorizationv1 "github.com/openshift/api/authorization/v1"
@@ -20,6 +21,7 @@ import (
 	"k8s.io/kubernetes/pkg/apis/networking"
 	"k8s.io/kubernetes/pkg/apis/rbac"
 
+	template "github.com/openshift/openshift-apiserver/pkg/template/apis/template"
 	storage "k8s.io/kubernetes/pkg/apis/storage"
 
 	// "k8s.io/client-go/kubernetes/scheme"
@@ -36,6 +38,9 @@ import (
 	"k8s.io/kubernetes/pkg/apis/core"
 
 	// cliprint "k8s.io/cli-runtime/pkg/printers"
+	quotav1 "github.com/openshift/api/quota/v1"
+	securityv1 "github.com/openshift/api/security/v1"
+	"github.com/openshift/openshift-apiserver/pkg/route/apis/route"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 
 	//
@@ -170,6 +175,12 @@ func RawObjectToRuntimeObject(rawObject []byte, schema *runtime.Scheme) runtime.
 		return &policy.PodDisruptionBudget{}
 	case *policy.PodSecurityPolicy:
 		return &policy.PodSecurityPolicy{}
+	case *project.Project:
+		return &project.Project{}
+	case *project.ProjectRequest:
+		return &project.ProjectRequest{}
+	case *quotav1.AppliedClusterResourceQuota:
+		return &quotav1.AppliedClusterResourceQuota{}
 	case *resource.ResourceClass:
 		return &resource.ResourceClass{}
 	case *resource.ResourceClaim:
@@ -186,8 +197,16 @@ func RawObjectToRuntimeObject(rawObject []byte, schema *runtime.Scheme) runtime.
 		return &rbac.Role{}
 	case *rbac.RoleBinding:
 		return &rbac.RoleBinding{}
+	case *route.Route:
+		return &route.Route{}
 	case *scheduling.PriorityClass:
 		return &scheduling.PriorityClass{}
+	case *securityv1.PodSecurityPolicyReview:
+		return &securityv1.PodSecurityPolicyReview{}
+	case *securityv1.PodSecurityPolicySelfSubjectReview:
+		return &securityv1.PodSecurityPolicySelfSubjectReview{}
+	case *securityv1.PodSecurityPolicySubjectReview:
+		return &securityv1.PodSecurityPolicySubjectReview{}
 	case *storage.CSIStorageCapacity:
 		return &storage.CSIStorageCapacity{}
 	case *storage.StorageClass:
@@ -198,6 +217,8 @@ func RawObjectToRuntimeObject(rawObject []byte, schema *runtime.Scheme) runtime.
 		return &storage.CSIDriver{}
 	case *storage.VolumeAttachment:
 		return &storage.VolumeAttachment{}
+	case *template.Template:
+		return &template.Template{}
 	}
 	//fmt.Println("RUNTIME UNKNOW")
 	return &runtime.Unknown{}

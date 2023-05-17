@@ -23,11 +23,17 @@ import (
 	discovery "k8s.io/kubernetes/pkg/apis/discovery"
 	storage "k8s.io/kubernetes/pkg/apis/storage"
 
+	templateapi "github.com/openshift/openshift-apiserver/pkg/template/apis/template"
+
 	"github.com/openshift/openshift-apiserver/pkg/build/apis/build"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	authorizationv1 "github.com/openshift/api/authorization/v1"
+	quotav1 "github.com/openshift/api/quota/v1"
+	securityv1 "github.com/openshift/api/security/v1"
 	imagev1 "github.com/openshift/openshift-apiserver/pkg/image/apis/image"
+	projectv1helpers "github.com/openshift/openshift-apiserver/pkg/project/apis/project"
+	"github.com/openshift/openshift-apiserver/pkg/route/apis/route"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -219,6 +225,44 @@ func addPolicyV1B1Types(scheme *runtime.Scheme) error {
 	return nil
 }
 
+func addProjectV1Types(scheme *runtime.Scheme) error {
+	GroupVersion := schema.GroupVersion{Group: "project.openshift.io", Version: "v1"}
+	types := []runtime.Object{
+		&projectv1helpers.Project{},
+		&projectv1helpers.ProjectRequest{},
+	}
+	scheme.AddKnownTypes(GroupVersion, types...)
+	return nil
+}
+
+func addQuotaV1Types(scheme *runtime.Scheme) error {
+	GroupVersion := schema.GroupVersion{Group: "quota.openshift.io", Version: "v1"}
+	types := []runtime.Object{
+		&quotav1.AppliedClusterResourceQuota{},
+	}
+	scheme.AddKnownTypes(GroupVersion, types...)
+	return nil
+}
+func addRouteV1Types(scheme *runtime.Scheme) error {
+	GroupVersion := schema.GroupVersion{Group: "route.openshift.io", Version: "v1"}
+	types := []runtime.Object{
+		&route.Route{},
+	}
+	scheme.AddKnownTypes(GroupVersion, types...)
+	return nil
+}
+
+func addSecurityV1Types(scheme *runtime.Scheme) error {
+	GroupVersion := schema.GroupVersion{Group: "security.openshift.io", Version: "v1"}
+	types := []runtime.Object{
+		&securityv1.PodSecurityPolicyReview{},
+		&securityv1.PodSecurityPolicySelfSubjectReview{},
+		&securityv1.PodSecurityPolicySubjectReview{},
+	}
+	scheme.AddKnownTypes(GroupVersion, types...)
+	return nil
+}
+
 func addStorageV1Types(scheme *runtime.Scheme) error {
 	GroupVersion := schema.GroupVersion{Group: "storage.k8s.io", Version: "v1"}
 	types := []runtime.Object{
@@ -256,6 +300,14 @@ func addSchedulingTypes(scheme *runtime.Scheme) error {
 	GroupVersion := schema.GroupVersion{Group: "scheduling.k8s.io", Version: "v1"}
 	types := []runtime.Object{
 		&scheduling.PriorityClass{},
+	}
+	scheme.AddKnownTypes(GroupVersion, types...)
+	return nil
+}
+func addTemplateV1Types(scheme *runtime.Scheme) error {
+	GroupVersion := schema.GroupVersion{Group: "template.openshift.io", Version: "v1"}
+	types := []runtime.Object{
+		&templateapi.Template{},
 	}
 	scheme.AddKnownTypes(GroupVersion, types...)
 	return nil

@@ -23,6 +23,11 @@ import (
 	authorizationprinters "github.com/openshift/openshift-apiserver/pkg/authorization/printers/internalversion"
 	buildprinters "github.com/openshift/openshift-apiserver/pkg/build/printers/internalversion"
 	imageprinters "github.com/openshift/openshift-apiserver/pkg/image/printers/internalversion"
+	projectprinters "github.com/openshift/openshift-apiserver/pkg/project/printers/internalversion"
+	quotaprinters "github.com/openshift/openshift-apiserver/pkg/quota/printers/internalversion"
+	routeprinters "github.com/openshift/openshift-apiserver/pkg/route/printers/internalversion"
+	securityprinters "github.com/openshift/openshift-apiserver/pkg/security/printers/internalversion"
+	templateprinters "github.com/openshift/openshift-apiserver/pkg/template/printers/internalversion"
 
 	//core "k8s.io/kubernetes/pkg/apis/core"
 	//ocpinternal "github.com/openshift/openshift-apiserver/pkg/apps/printers/internalversion"
@@ -87,6 +92,11 @@ func (Koff *KoffCommand) InitializeTableGenerator() {
 	appsv1printer.AddAppsOpenShiftHandlers(Koff.TableGenerator)
 	authorizationprinters.AddAuthorizationOpenShiftHandler(Koff.TableGenerator)
 	imageprinters.AddImageOpenShiftHandlers(Koff.TableGenerator)
+	projectprinters.AddProjectOpenShiftHandlers(Koff.TableGenerator)
+	quotaprinters.AddQuotaOpenShiftHandler(Koff.TableGenerator)
+	securityprinters.AddSecurityOpenShiftHandler(Koff.TableGenerator)
+	routeprinters.AddRouteOpenShiftHandlers(Koff.TableGenerator)
+	templateprinters.AddTemplateOpenShiftHandlers(Koff.TableGenerator)
 }
 
 func (Koff *KoffCommand) InitializeSchema() {
@@ -115,11 +125,16 @@ func (Koff *KoffCommand) InitializeSchema() {
 	_ = addNodeTypes(Koff.Schema)
 	_ = addPolicyV1Types(Koff.Schema)
 	_ = addPolicyV1B1Types(Koff.Schema)
+	_ = addProjectV1Types(Koff.Schema)
+	_ = addQuotaV1Types(Koff.Schema)
 	_ = addResourceV1A2Types(Koff.Schema)
+	_ = addRouteV1Types(Koff.Schema)
 	_ = addRBACTypes(Koff.Schema)
 	_ = addSchedulingTypes(Koff.Schema)
+	_ = addSecurityV1Types(Koff.Schema)
 	_ = addStorageV1Types(Koff.Schema)
 	_ = addStorageV1B1Types(Koff.Schema)
+	_ = addTemplateV1Types(Koff.Schema)
 	utilruntime.Must(schemeBuilder.AddToScheme(Koff.Schema))
 }
 
