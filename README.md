@@ -1,5 +1,12 @@
 # `koff`
 
+## Installation
+### Using `go`
+```
+go install github.com/gmeghnag/koff 
+```
+
+## Usage
 ```
 # kubectl get node,pod,svc -n kube-system -o yaml > resources.yaml
 # cat resources.yaml | koff -N -K
