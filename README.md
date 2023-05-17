@@ -15,14 +15,14 @@ It reads input, performs the specific filter operations based on the flags and a
 
 ## **¿How?**
 - Via piped input:
-```
-$ cat resources.yaml | koff get pod/postgresql-1-2gxpm svc/postgresql
-NAME                     READY   STATUS    RESTARTS   AGE
-pod/postgresql-1-2gxpm   1/1     Running   0          15m
+  ```
+  $ cat resources.yaml | koff get pod/postgresql-1-2gxpm svc/postgresql
+  NAME                     READY   STATUS    RESTARTS   AGE
+  pod/postgresql-1-2gxpm   1/1     Running   0          15m
 
-NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
-service/postgresql   ClusterIP   172.30.58.223   <none>        5432/TCP   16m
-```
+  NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+  service/postgresql   ClusterIP   172.30.58.223   <none>        5432/TCP   16m
+  ```
 - Referencing the file to use via `koff use <resources>.yaml` before executing `koff`:
   ```
   $ koff use resources.yaml
