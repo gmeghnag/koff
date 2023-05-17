@@ -7,9 +7,13 @@ import (
 
 	"bytes"
 	"fmt"
+	"io/ioutil"
+	"math/rand"
 	"os"
 	"strconv"
+	"strings"
 	"time"
+	"unsafe"
 
 	//"k8s.io/kubernetes/pkg/apis/rbac"
 	//rbac "k8s.io/api/rbac/v1"
@@ -20,11 +24,16 @@ import (
 	//runtime "k8s.io/apimachinery/pkg/runtime"
 	//utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
+	"github.com/gmeghnag/koff/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/jsonpath"
+	"k8s.io/klog/v2"
+	"sigs.k8s.io/yaml"
+
 	//core "k8s.io/kubernetes/pkg/apis/core"
 	//ocpinternal "github.com/openshift/openshift-apiserver/pkg/apps/printers/internalversion"
 	// cliprint "k8s.io/cli-runtime/pkg/printers"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	//
 )
 
@@ -119,4 +128,215 @@ func Exists(path string) (bool, error) {
 		return false, nil
 	}
 	return false, err
+}
+
+func ParseGetArgs(Koff *types.KoffCommand, args []string, yamlData []byte) error {
+
+	if len(args) == 1 && !strings.Contains(args[0], "/") {
+		if strings.Contains(args[0], ",") {
+			resourcesTypes := strings.Split(strings.TrimPrefix(strings.TrimSuffix(args[0], ","), ","), ",")
+			for _, resourceType := range resourcesTypes {
+				if strings.Contains(resourceType, ".") {
+					resourceType = strings.SplitN(resourceType, ".", 2)[0]
+				} else {
+					resourceType, _ = normalizeResourceAlias(Koff, strings.ToLower(resourceType), yamlData)
+				}
+				Koff.ArgPresent[resourceType] = false
+				Koff.GetArgs[resourceType] = make(map[string]struct{})
+			}
+		} else {
+			resourceType := args[0]
+			if strings.Contains(args[0], ".") {
+				resourceType = strings.SplitN(args[0], ".", 2)[0]
+			} else {
+				resourceType, _ = normalizeResourceAlias(Koff, strings.ToLower(args[0]), yamlData)
+			}
+			Koff.ArgPresent[resourceType] = false
+			Koff.GetArgs[resourceType] = make(map[string]struct{})
+		}
+	}
+	if len(args) > 0 && strings.Contains(args[0], "/") {
+		if len(args) == 1 {
+			Koff.SingleResource = true
+		}
+		for _, arg := range args {
+			if strings.Contains(arg, "/") {
+				resource := strings.Split(arg, "/")
+				resourceType, resourceName := strings.ToLower(resource[0]), resource[1]
+				if strings.Contains(resourceType, ".") {
+					resourceType = strings.SplitN(resourceType, ".", 2)[0]
+				} else {
+					resourceType, _ = normalizeResourceAlias(Koff, resourceType, yamlData)
+				}
+				Koff.ArgPresent[resourceType] = false
+				_, resourceTypeIsPresent := Koff.GetArgs[resourceType]
+				if !resourceTypeIsPresent {
+					Koff.GetArgs[resourceType] = make(map[string]struct{})
+				}
+				Koff.GetArgs[resourceType][resourceName] = struct{}{}
+			} else {
+				return fmt.Errorf("there is no need to specify a resource type as a separate argument when passing arguments in resource/name form (e.g. 'oc get resource/<resource_name>' instead of 'oc get resource resource/<resource_name>'")
+			}
+		}
+	}
+	if len(args) > 1 && !strings.Contains(args[0], "/") {
+		resourceType := strings.ToLower(args[0])
+		if strings.Contains(resourceType, ".") {
+			resourceType = strings.SplitN(resourceType, ".", 1)[0]
+		} else {
+			resourceType, _ = normalizeResourceAlias(Koff, resourceType, yamlData)
+		}
+		// TODO FARE LO STESSO ANCHE SOPRA EPOI QUANDO PASSI ATTRAVERSO OGNI OGGETTO QUESTO AGGIORNA LA MAP
+		Koff.ArgPresent[resourceType] = false
+		Koff.GetArgs[resourceType] = make(map[string]struct{})
+		if len(args[0:]) == 2 {
+			Koff.SingleResource = true
+		}
+		for _, resourceName := range args[1:] {
+			Koff.GetArgs[resourceType][resourceName] = struct{}{}
+		}
+	}
+	return nil
+}
+
+type ResourceInfo struct {
+	Group string `yaml:"Group"`
+	Name  string `yaml:"Name"`
+}
+
+func normalizeResourceAlias(koff *types.KoffCommand, alias string, yamlData []byte) (string, error) {
+	var knownResources map[string]map[string]interface{}
+	_ = yaml.Unmarshal(yamlData, &knownResources)
+	value, ok := knownResources[alias]
+	if ok {
+		klog.V(3).Info("INFO ", fmt.Sprintf("Found alias \"%s\" in known-resources.", alias))
+		resourceType := value["name"].(string)
+		return resourceType, nil
+	} else {
+		klog.V(3).Info("INFO ", fmt.Sprintf("Alias \"%s\" not found in known-resources.", alias))
+		crd, ok := koff.AliasToCrd[alias]
+		if ok {
+			_crd := &apiextensionsv1.CustomResourceDefinition{Spec: crd.Spec}
+			return strings.ToLower(_crd.Spec.Names.Kind), nil
+		}
+		resourceType, _, err := RetrieveKindGroupFromCRDS(koff, alias, yamlData)
+		if err == nil {
+			return resourceType, nil
+		}
+	}
+	return alias, fmt.Errorf("Alias \"%s\" not identified as any known resource or custom resource.", alias)
+}
+
+func RetrieveKindGroup(alias string, yamlData []byte) (string, string, error) {
+	//if strings.Contains(alias, ".") {
+	//	resourceKindAndGroup := strings.SplitN(alias, ".", 1)
+	//	return resourceKindAndGroup[0], resourceKindAndGroup[1], nil
+	//}
+	var knownResources map[string]map[string]interface{}
+	_ = yaml.Unmarshal(yamlData, &knownResources)
+	value, ok := knownResources[alias]
+	if ok {
+		klog.V(3).Info("INFO ", fmt.Sprintf("found alias \"%s\" in known-resources.yaml", alias))
+		resourceName := value["name"].(string)
+		resourceGroup := value["group"].(string)
+		return resourceName, resourceGroup, nil
+	}
+	klog.V(3).Info("INFO ", fmt.Sprintf("No internal resource found with name or alias \"%s\"", alias))
+	return alias, "", fmt.Errorf("No internal resource found with name or alias \"%s\"", alias)
+}
+func RetrieveKindGroupFromCRDS(koff *types.KoffCommand, alias string, yamlData []byte) (string, string, error) {
+	home, _ := os.UserHomeDir()
+	crdsPath := home + "/.koff/customresourcedefinitions/"
+
+	_, err := Exists(crdsPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
+	crds, _ := ioutil.ReadDir(crdsPath)
+	for _, f := range crds {
+		crdYamlPath := crdsPath + f.Name()
+		crdByte, _ := ioutil.ReadFile(crdYamlPath)
+		_crd := &apiextensionsv1.CustomResourceDefinition{}
+		if err := yaml.Unmarshal([]byte(crdByte), &_crd); err != nil {
+			continue
+		}
+		koff.AliasToCrd[strings.ToLower(_crd.Spec.Names.Kind)] = apiextensionsv1.CustomResourceDefinition{Spec: _crd.Spec}
+		if strings.ToLower(_crd.Spec.Names.Kind) == alias || strings.ToLower(_crd.Spec.Names.Plural) == alias || strings.ToLower(_crd.Spec.Names.Singular) == alias || StringInSlice(alias, _crd.Spec.Names.ShortNames) || _crd.Spec.Names.Singular+"."+_crd.Spec.Group == alias {
+			koff.AliasToCrd[alias] = apiextensionsv1.CustomResourceDefinition{Spec: _crd.Spec}
+			klog.V(4).Info("INFO ", fmt.Sprintf("Alias  \"%s\" found in path \"%s\".", alias, crdYamlPath))
+			return strings.ToLower(_crd.Spec.Names.Kind), _crd.Spec.Group, nil
+		}
+		klog.V(5).Info("INFO ", fmt.Sprintf("Alias \"%s\" not found in path \"%s\".", alias, crdYamlPath))
+	}
+	klog.V(4).Info("INFO ", fmt.Sprintf("No customResource found with name or alias \"%s\" in path: \"%s\".", alias, crdsPath))
+	return alias, "", fmt.Errorf("No customResource found with name or alias \"%s\"in path: \"%s\".", alias, crdsPath)
+}
+
+func StringInSlice(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
+}
+
+// Generate random alphanumeric string
+// https://stackoverflow.com/a/31832326
+var src = rand.NewSource(time.Now().UnixNano())
+
+const letterBytes = "1234567890"
+const (
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+)
+
+func RandStringBytes(n int) string {
+	b := make([]byte, n)
+	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
+	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = src.Int63(), letterIdxMax
+		}
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			b[i] = letterBytes[idx]
+			i--
+		}
+		cache >>= letterIdxBits
+		remain--
+	}
+
+	return *(*string)(unsafe.Pointer(&b))
+}
+
+func IsDirectory(path string) (bool, error) {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+
+	return fileInfo.IsDir(), err
+}
+
+// CONSTS
+const charset = "abcdefghijklmnopqrstuvwxyz" +
+	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+// VARS
+var seededRand *rand.Rand = rand.New(
+	rand.NewSource(time.Now().UnixNano()))
+
+// FUNCS
+func StringWithCharset(length int, charset string) string {
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[seededRand.Intn(len(charset))]
+	}
+	return string(b)
+}
+
+func RandString(length int) string {
+	return StringWithCharset(length, charset)
 }

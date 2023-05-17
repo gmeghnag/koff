@@ -2,15 +2,12 @@ package tablegenerator
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
+	"sort"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/printers"
-	"sigs.k8s.io/yaml"
 
 	//"github.com/gmeghnag/koff/types"
 
@@ -29,7 +26,22 @@ func InternalResourceTable(Koff *types.KoffCommand, runtimeObject runtime.Object
 	for i, column := range table.ColumnDefinitions {
 		if column.Name == "Age" {
 			table.Rows[0].Cells[i] = helpers.TranslateTimestamp(unstruct.GetCreationTimestamp())
-			break
+			if unstruct.GetKind() != "Node" {
+				break
+			}
+		}
+		if column.Name == "Roles" {
+			var NodeRoles []string
+			for i := range unstruct.GetLabels() {
+				if strings.HasPrefix(i, "node-role.kubernetes.io/") {
+					NodeRoles = append(NodeRoles, strings.Split(i, "/")[1])
+				}
+			}
+			sort.Strings(NodeRoles)
+			if len(NodeRoles) > 0 {
+				table.Rows[0].Cells[i] = strings.Join(NodeRoles, ",")
+			}
+
 		}
 	}
 	if table.ColumnDefinitions[0].Name == "Name" {
@@ -73,34 +85,12 @@ func UndefinedResourceTable(Koff *types.KoffCommand, unstruct unstructured.Unstr
 func GenerateCustomResourceTable(Koff *types.KoffCommand, unstruct unstructured.Unstructured) (*metav1.Table, error) {
 	table := &metav1.Table{}
 	// search for its corresponding CRD obly if this object Kind differs from the previous one parsed
-	if Koff.CurrentKind != unstruct.GetObjectKind().GroupVersionKind().Kind {
+	if Koff.CurrentKind != unstruct.GetKind() {
 		Koff.CRD = nil
-		home, _ := os.UserHomeDir()
-		crdsPath := home + "/.koff/customresourcedefinitions/"
-		objectKind := unstruct.GetKind()
-		if strings.HasSuffix(objectKind, ".config") {
-			objectKind = strings.Replace(objectKind, ".config", ".config.openshift.io", -1)
-		}
-		_, err := helpers.Exists(crdsPath)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err.Error())
-			os.Exit(1)
-		}
-		crds, _ := ioutil.ReadDir(crdsPath)
-		for _, f := range crds {
-			crdYamlPath := crdsPath + f.Name()
-			crdByte, _ := ioutil.ReadFile(crdYamlPath)
-			_crd := &apiextensionsv1.CustomResourceDefinition{}
-			if err := yaml.Unmarshal([]byte(crdByte), &_crd); err != nil {
-				fmt.Fprintln(os.Stderr, "Error when trying to unmarshal file", crdYamlPath)
-				os.Exit(1)
-			}
-			if strings.ToLower(_crd.Spec.Names.Kind) == strings.ToLower(objectKind) {
-				Koff.CRD = _crd
-				klog.V(4).Info("INFO ", fmt.Sprintf("\"%s\" found in path \"%s\"", unstruct.GetKind(), crdYamlPath))
-				break
-			}
-			klog.V(4).Info("INFO ", fmt.Sprintf("\"%s\" not found in path \"%s\"", unstruct.GetKind(), crdYamlPath))
+		crd, ok := Koff.AliasToCrd[strings.ToLower(unstruct.GetKind())]
+		if ok {
+			_crd := &apiextensionsv1.CustomResourceDefinition{Spec: crd.Spec}
+			Koff.CRD = _crd
 		}
 	}
 	if Koff.CRD == nil {

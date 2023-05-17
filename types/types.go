@@ -31,83 +31,52 @@ import (
 	printersinternal "k8s.io/kubernetes/pkg/printers/internalversion"
 
 	// cliprint "k8s.io/cli-runtime/pkg/printers"
-	_ "embed"
 
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	cliprint "k8s.io/cli-runtime/pkg/printers"
 )
 
-//	func (Koff *KoffCommand) rawObjectToTable(rawObject []byte, unstructuredObject unstructured.Unstructured) *metav1.Table {
-//		// needs code review
-//		unstruct := &unstructuredObject
-//		RuntimeObjectType := rawObjectToRuntimeObject(rawObject, Koff.Schema)
-//		if err := yaml.Unmarshal([]byte(rawObject), RuntimeObjectType); err != nil {
-//			//log.Printf(".... Error: %s\n", err)
-//		}
-//		table, err := tablegenerator.InternalResourceTable(RuntimeObjectType, unstruct)
-//		if err != nil {
-//			// printer for the object is not registered or is a crd
-//			//log.printf fmt.Println(err, unstruct.GetKind(), unstruct.GetAPIVersion())
-//			table, err = Koff.GenerateCustomResourceTable(*unstruct)
-//			if err != nil {
-//				table = undefinedResourceTable(*unstruct)
-//
-//			}
-//
-//		}
-//
-//		// TODO Move it into the specific TableConverter method/function
-//		// to prevent looping again over the ColumnDefinitions
-//		//if Koff.ShowKind == true {
-//		//	if unstruct.GetAPIVersion() == "v1" {
-//		//		table.Rows[0].Cells[0] = strings.ToLower(unstruct.GetKind()) + "/" + unstruct.GetName()
-//		//	} else {
-//		//		table.Rows[0].Cells[0] = strings.ToLower(unstruct.GetKind()) + "." + strings.Split(unstruct.GetAPIVersion(), "/")[0] + "/" + unstruct.GetName()
-//		//	}
-//		//} else {
-//		//	table.Rows[0].Cells[0] = unstruct.GetName()
-//		//}
-//		//if unstruct.GetNamespace() != "" {
-//		//	namespaceRaw := metav1.TableRow{}
-//		//	namespaceRaw.Cells = append(namespaceRaw.Cells, unstruct.GetNamespace())
-//		//	namespaceRaw.Cells = append(namespaceRaw.Cells, table.Rows[0].Cells...)
-//		//	table.Rows[0] = namespaceRaw
-//		//	columnWithNamespace := []metav1.TableColumnDefinition{}
-//		//	columnWithNamespace = append(columnWithNamespace, metav1.TableColumnDefinition{Name: "NAMESPACE"})
-//		//	columnWithNamespace = append(columnWithNamespace, table.ColumnDefinitions...)
-//		//	table.ColumnDefinitions = columnWithNamespace
-//		//}
-//
-//		return table
-//
-// }
 func NewKoffCommand() *KoffCommand {
 	koff := &KoffCommand{}
 	koff.InitializeSchema()
+	koff.UnstructuredList = UnstructuredList{Kind: "List", ApiVersion: "v1", Items: []unstructured.Unstructured{}}
 	koff.InitializeTableGenerator()
 	koff.Table = metav1.Table{}
+	koff.GetArgs = make(map[string]map[string]struct{})
+	koff.AliasToCrd = make(map[string]apiextensionsv1.CustomResourceDefinition)
+	koff.ArgPresent = make(map[string]bool)
 	return koff
 }
 
 type KoffCommand struct {
-	Kind           string
-	NoHeaders      bool
-	Namespace      string
-	Wide           bool
-	ShowLabels     bool
-	SingleResource bool
-	Items          []unstructured.UnstructuredList
-	Output         bytes.Buffer
-	CurrentKind    string
-	LastKind       string
-	Schema         *runtime.Scheme
-	Printer        cliprint.ResourcePrinter
-	Table          metav1.Table
-	TableGenerator *printers.HumanReadableGenerator
-	CRD            *apiextensionsv1.CustomResourceDefinition
-	FromInput      bool
-	ShowKind       bool
-	ShowNamespace  bool
+	NoHeaders         bool
+	Namespace         string
+	Wide              bool
+	ShowLabels        bool
+	SingleResource    bool
+	UnstructuredList  UnstructuredList
+	Output            bytes.Buffer
+	CurrentKind       string
+	LastKind          string
+	Schema            *runtime.Scheme
+	Printer           cliprint.ResourcePrinter
+	Table             metav1.Table
+	TableGenerator    *printers.HumanReadableGenerator
+	CRD               *apiextensionsv1.CustomResourceDefinition
+	FromInput         bool
+	ShowKind          bool
+	ShowNamespace     bool
+	ShowManagedFields bool
+	OutputFormat      string
+	GetArgs           map[string]map[string]struct{}
+	AliasToCrd        map[string]apiextensionsv1.CustomResourceDefinition
+	ArgPresent        map[string]bool
+}
+
+type UnstructuredList struct {
+	ApiVersion string                      `json:"apiVersion"`
+	Kind       string                      `json:"kind"`
+	Items      []unstructured.Unstructured `json:"items"`
 }
 
 func (Koff *KoffCommand) InitializeTableGenerator() {
@@ -152,4 +121,23 @@ func (Koff *KoffCommand) InitializeSchema() {
 	_ = addStorageV1Types(Koff.Schema)
 	_ = addStorageV1B1Types(Koff.Schema)
 	utilruntime.Must(schemeBuilder.AddToScheme(Koff.Schema))
+}
+
+type Context struct {
+	Id        string `json:"id"`
+	Path      string `json:"path"`
+	InUse     string `json:"inUse"`
+	Namespace string `json:"namespace"`
+}
+
+type Config struct {
+	Id       string    `json:"id,omitempty"`
+	Contexts []Context `json:"contexts,omitempty"`
+	InUse    InUse     `json:"inUse,omitempty"`
+}
+
+type InUse struct {
+	Path      string `json:"path"`
+	IsBundle  bool   `json:"isBudle"`
+	Namespace string `json:"namespace"`
 }

@@ -18,12 +18,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/gmeghnag/koff/cmd"
+	koff "github.com/gmeghnag/koff/cmd"
 )
 
 func main() {
-	if err := cmd.RootCmd.Execute(); err != nil {
-		fmt.Println(err)
+	if err := koff.RootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err.Error())
 		os.Exit(1)
 	}
 }

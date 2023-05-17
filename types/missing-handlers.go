@@ -23,8 +23,6 @@ func printAPIService(obj *apiregistrationv1.APIService, options printers.Generat
 	if obj.Spec.Service != nil {
 		service = obj.Spec.Service.Namespace + "/" + obj.Spec.Service.Name
 	}
-
-	// AVAILABLE
 	available := "Unknown"
 	for _, condition := range obj.Status.Conditions {
 		if condition.Type == "Available" {
