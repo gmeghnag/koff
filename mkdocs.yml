@@ -1,0 +1,73 @@
+site_name: "KOFF"
+site_url: https://gmeghnag.github.io/koff
+site_author: Gabriel Meghnagi
+
+# Repository
+repo_name: gmeghnag/koff
+repo_url: https://github.com/gmeghnag/koff
+plugins:
+- search
+nav:
+  - 'Home': 
+    - README: index.md
+  - Install and upgrade:
+    - install/install.md
+    - install/upgrade.md
+  - 'Subcommands':
+    - koff get: subcmds/get.md
+
+extra_css:
+    - 'css/extra.css'
+
+extra:
+  generator: false
+
+theme:
+  icon:
+    repo: fontawesome/brands/github
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.instant
+    - navigation.sections
+    - content.code.annotate
+    - content.code.copy
+    - navigation.footer
+    - toc.integrate
+    - toc.follow
+    - navigation.top
+
+  palette:
+    - scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+
+  include_sidebar: true
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true 
+  - toc:
+      permalink: true
+  - tables
+  - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
