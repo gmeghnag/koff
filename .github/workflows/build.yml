@@ -1,0 +1,58 @@
+name: Build
+on:
+  push:
+    tags:
+      - "v*.*.*"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+
+      - name: Build
+        run: |
+          echo "RELEASE_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV 
+          TAG="${GITHUB_REF#refs/tags/}"
+          HASH=$(git log -n1 --pretty=format:%h)
+          echo ${TAG} ${HASH}
+          export PATH=$PATH:/usr/local/go/bin \
+          && env GOOS=linux CGO_ENABLED=0 GOARCH=amd64 go build -ldflags "-X 'github.com/gmeghnag/koff/vars.KoffTag=${TAG}' -X github.com/gmeghnag/koff/vars.KoffHash=${HASH}" -o koff \
+          && cp koff koff_Linux_x86_64 && tar -cvzf koff_Linux_x86_64.tar.gz koff && rm -rf koff \
+          && env GOOS=linux CGO_ENABLED=0 GOARCH=arm64 go build -ldflags "-X 'github.com/gmeghnag/koff/vars.KoffTag=${TAG}' -X github.com/gmeghnag/koff/vars.KoffHash=${HASH}" -o koff \
+          && tar -cvzf koff_Linux_arm64.tar.gz koff && cp koff_Linux_arm64.tar.gz koff_Linux_aarch64.tar.gz && rm -rf koff \
+          && env GOOS=darwin CGO_ENABLED=0 GOARCH=amd64 go build -ldflags "-X 'github.com/gmeghnag/koff/vars.KoffTag=${TAG}' -X github.com/gmeghnag/koff/vars.KoffHash=${HASH}" -o koff \
+          && cp koff koff_Darwin_x86_64 && tar -cvzf koff_Darwin_x86_64.tar.gz koff && rm -rf koff \
+          && env GOOS=darwin CGO_ENABLED=0 GOARCH=arm64 go build -ldflags "-X 'github.com/gmeghnag/koff/vars.KoffTag=${TAG}' -X github.com/gmeghnag/koff/vars.KoffHash=${HASH}" -o koff \
+          && tar -cvzf koff_Darwin_arm64.tar.gz koff && cp koff_Darwin_arm64.tar.gz koff_Darwin_aarch64.tar.gz && rm -rf koff \
+          && env GOOS=windows CGO_ENABLED=0 GOARCH=amd64 go build -ldflags "-X 'github.com/gmeghnag/koff/vars.KoffTag=${TAG}' -X github.com/gmeghnag/koff/vars.KoffHash=${HASH}" -o koff.exe \
+          && zip koff_Windows_x86_64.zip koff.exe \
+          && md5sum koff_Linux_x86_64.tar.gz | tee -a checksums.txt \
+          && md5sum koff_Linux_arm64.tar.gz | tee -a checksums.txt \
+          && md5sum koff_Linux_aarch64.tar.gz | tee -a checksums.txt \
+          && md5sum koff_Darwin_x86_64.tar.gz | tee -a checksums.txt \
+          && md5sum koff_Darwin_arm64.tar.gz | tee -a checksums.txt \
+          && md5sum koff_Darwin_aarch64.tar.gz | tee -a checksums.txt \
+          && md5sum koff_Windows_x86_64.zip | tee -a checksums.txt \
+          && md5sum koff_Darwin_x86_64 | tee -a checksums.txt \
+          && md5sum koff_Linux_x86_64| tee -a checksums.txt
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            checksums.txt
+            koff_Linux_x86_64
+            koff_Linux_x86_64.tar.gz 
+            koff_Linux_arm64.tar.gz 
+            koff_Linux_aarch64.tar.gz
+            koff_Darwin_x86_64
+            koff_Darwin_x86_64.tar.gz
+            koff_Darwin_arm64.tar.gz 
+            koff_Darwin_aarch64.tar.gz 
+            koff_Windows_x86_64.zip
+          name: "${{ env.RELEASE_TAG }} release"
