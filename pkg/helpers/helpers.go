@@ -219,7 +219,7 @@ func normalizeResourceAlias(koff *types.KoffCommand, alias string, yamlData []by
 			_crd := &apiextensionsv1.CustomResourceDefinition{Spec: crd.Spec}
 			return strings.ToLower(_crd.Spec.Names.Kind), nil
 		}
-		resourceType, _, err := RetrieveKindGroupFromCRDS(koff, alias, yamlData)
+		resourceType, _, err := RetrieveKindGroupFromCRDS(koff, alias)
 		if err == nil {
 			return resourceType, nil
 		}
@@ -244,7 +244,7 @@ func RetrieveKindGroup(alias string, yamlData []byte) (string, string, error) {
 	klog.V(3).Info("INFO ", fmt.Sprintf("No internal resource found with name or alias \"%s\"", alias))
 	return alias, "", fmt.Errorf("No internal resource found with name or alias \"%s\"", alias)
 }
-func RetrieveKindGroupFromCRDS(koff *types.KoffCommand, alias string, yamlData []byte) (string, string, error) {
+func RetrieveKindGroupFromCRDS(koff *types.KoffCommand, alias string) (string, string, error) {
 	home, _ := os.UserHomeDir()
 	crdsPath := home + "/.koff/customresourcedefinitions/"
 
