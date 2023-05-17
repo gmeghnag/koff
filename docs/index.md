@@ -54,13 +54,13 @@ service/postgresql   ClusterIP   172.30.58.223   <none>        5432/TCP   16m
     As default behaviour, if the `CustomResourceDefinition` for the *custom resource* is not found the resulting table will have three columns only: `NAMESPACE`, `NAME`, `CREATED AT`.
 
     ```
-    $ kubectl get clusteroperator etcd -o yaml | koff get clusteroperator
+    $ kubectl get clusteroperator etcd -o yaml | koff 
     NAME                                       CREATED AT
     clusteroperator.config.openshift.io/etcd   2023-05-15T01:53:20
 
     $ kubectl get crd clusteroperators.config.openshift.io -o yaml > ~/.koff/customresourcedefinitions/clusteroperators.config.openshift.io.yaml
 
-    $ kubectl get clusteroperator etcd -o yaml | koff get clusteroperator
+    $ kubectl get clusteroperator etcd -o yaml | koff
     NAME                                       VERSION   AVAILABLE   PROGRESSING   DEGRADED   SINCE
     clusteroperator.config.openshift.io/etcd   4.9.59    True        False         False      2d
     ```
