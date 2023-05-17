@@ -38,7 +38,7 @@ theme:
     - navigation.top
 
   palette:
-    - scheme: slate
+    - scheme: default
       primary: blue
       accent: blue
       toggle:
