@@ -45,7 +45,7 @@ func InternalResourceTable(Koff *types.KoffCommand, runtimeObject runtime.Object
 		}
 	}
 	if table.ColumnDefinitions[0].Name == "Name" {
-		if Koff.ShowKind == true {
+		if Koff.ShowKind == true || Koff.Namespace == "" {
 			if unstruct.GetAPIVersion() == "v1" {
 				table.Rows[0].Cells[0] = strings.ToLower(unstruct.GetKind()) + "/" + unstruct.GetName()
 			} else {
@@ -61,25 +61,6 @@ func InternalResourceTable(Koff *types.KoffCommand, runtimeObject runtime.Object
 		table.Rows[0].Cells = append([]interface{}{unstruct.GetNamespace()}, table.Rows[0].Cells...)
 	}
 	return table, err
-}
-
-func UndefinedResourceTable(Koff *types.KoffCommand, unstruct unstructured.Unstructured) *metav1.Table {
-	table := &metav1.Table{}
-	if Koff.ShowNamespace == true && unstruct.GetNamespace() != "" {
-		table.ColumnDefinitions = []metav1.TableColumnDefinition{
-			{Name: "Namespace", Type: "string", Format: "name"},
-			{Name: "Name", Type: "string", Format: "name"},
-			{Name: "Created At", Type: "date"}, // Priority: 1
-		}
-		table.Rows = []metav1.TableRow{{Cells: []interface{}{unstruct.GetNamespace(), unstruct.GetName(), unstruct.GetCreationTimestamp().Time.UTC().Format("2006-01-02T15:04:05")}}}
-	} else {
-		table.ColumnDefinitions = []metav1.TableColumnDefinition{
-			{Name: "Name", Type: "string", Format: "name"},
-			{Name: "Created At", Type: "date"}, // Priority: 1
-		}
-		table.Rows = []metav1.TableRow{{Cells: []interface{}{unstruct.GetName(), unstruct.GetCreationTimestamp().Time.UTC().Format("2006-01-02T15:04:05")}}}
-	}
-	return table
 }
 
 func GenerateCustomResourceTable(Koff *types.KoffCommand, unstruct unstructured.Unstructured) (*metav1.Table, error) {
@@ -102,7 +83,7 @@ func GenerateCustomResourceTable(Koff *types.KoffCommand, unstruct unstructured.
 				{Name: "Name", Type: "string", Format: "string"},
 				{Name: "Created At", Type: "date"},
 			}
-			if Koff.ShowKind == true {
+			if Koff.ShowKind == true || Koff.Namespace == "" {
 				table.Rows = []metav1.TableRow{{Cells: []interface{}{unstruct.GetNamespace(), strings.ToLower(unstruct.GetKind()) + "." + strings.Split(unstruct.GetAPIVersion(), "/")[0] + "/" + unstruct.GetName(), unstruct.GetCreationTimestamp().Time.UTC().Format("2006-01-02T15:04:05")}}}
 			} else {
 				table.Rows = []metav1.TableRow{{Cells: []interface{}{unstruct.GetNamespace(), unstruct.GetName(), unstruct.GetCreationTimestamp().Time.UTC().Format("2006-01-02T15:04:05")}}}
@@ -113,7 +94,7 @@ func GenerateCustomResourceTable(Koff *types.KoffCommand, unstruct unstructured.
 				{Name: "Name", Type: "string", Format: "name"},
 				{Name: "Created At", Type: "date"},
 			}
-			if Koff.ShowKind == true {
+			if Koff.ShowKind == true || Koff.Namespace == "" {
 				table.Rows = []metav1.TableRow{{Cells: []interface{}{strings.ToLower(unstruct.GetKind()) + "." + strings.Split(unstruct.GetAPIVersion(), "/")[0] + "/" + unstruct.GetName(), unstruct.GetCreationTimestamp().Time.UTC().Format("2006-01-02T15:04:05")}}}
 
 			} else {
@@ -126,7 +107,7 @@ func GenerateCustomResourceTable(Koff *types.KoffCommand, unstruct unstructured.
 
 	cells := []interface{}{}
 	// table.ColumnDefinitions = []metav1.TableColumnDefinition{{Name: "Name", Format: "name"}}
-	if Koff.ShowKind == true {
+	if Koff.ShowKind == true || Koff.Namespace == "" {
 		if Koff.ShowNamespace && unstruct.GetNamespace() != "" {
 			table.ColumnDefinitions = []metav1.TableColumnDefinition{{Name: "Namespace", Format: "string"}, {Name: "Name", Format: "name"}}
 			cells = []interface{}{unstruct.GetNamespace(), strings.ToLower(unstruct.GetKind()) + "." + strings.Split(unstruct.GetAPIVersion(), "/")[0] + "/" + unstruct.GetName()}
