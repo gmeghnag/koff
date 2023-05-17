@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 
 	"github.com/gmeghnag/koff/cmd/get"
+	"github.com/gmeghnag/koff/cmd/upgrade"
 	"github.com/gmeghnag/koff/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -129,6 +130,7 @@ func init() {
 	RootCmd.AddCommand(
 		get.GetCmd,
 		UseCmd,
+		upgrade.Upgrade,
 	)
 }
 

@@ -10,6 +10,9 @@ github.com/blang/semver/v4
 # github.com/cespare/xxhash/v2 v2.1.2
 ## explicit; go 1.11
 github.com/cespare/xxhash/v2
+# github.com/coreos/go-semver v0.3.1
+## explicit; go 1.8
+github.com/coreos/go-semver/semver
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
@@ -86,9 +89,15 @@ github.com/liggitt/tabwriter
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
+# github.com/mattn/go-runewidth v0.0.14
+## explicit; go 1.9
+github.com/mattn/go-runewidth
 # github.com/matttproud/golang_protobuf_extensions v1.0.2
 ## explicit; go 1.9
 github.com/matttproud/golang_protobuf_extensions/pbutil
+# github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db
+## explicit
+github.com/mitchellh/colorstring
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
 ## explicit
 github.com/modern-go/concurrent
@@ -163,6 +172,12 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
+# github.com/rivo/uniseg v0.2.0
+## explicit; go 1.12
+github.com/rivo/uniseg
+# github.com/schollz/progressbar/v3 v3.13.1
+## explicit; go 1.13
+github.com/schollz/progressbar/v3
 # github.com/spf13/cobra v1.7.0
 ## explicit; go 1.15
 github.com/spf13/cobra
