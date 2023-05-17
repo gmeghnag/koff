@@ -8,8 +8,7 @@ It allows you to process kubernetes resources in `yaml` or `json` format, from e
 It reads input, performs the specific filter operations based on the flags and arguments (if provided), and writes the output in either tabular (as default), `json` or `yaml` format. 
 
 ## **¿Why?**
-- Because **sometimes** it is easier to ask for specific resources and check them offline instead of taking two or more people's time to set up a meeting and check for the same.
-- It's helpful in conjunction with `kubectl` to take a "snapshot" of specific resources at that specific point in time and parse the same later on.
+Helpful in conjunction with `kubectl` to take a "snapshot" of specific resources at that specific point in time and parse the same later on.
 
 ## **¿How?**
 - Via piped input:
