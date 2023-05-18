@@ -1,7 +1,6 @@
 # `koff` :fontawesome-brands-golang:
 ---
 
-## **¿What?**
 `koff` is a command-line tool that allows you to process kubernetes resources in `yaml` or `json` format, from either file or piped input.<br />
 It reads input, performs the specific filter operations based on the flags and arguments (if provided), and writes the output in either tabular (as default), `json` or `yaml` format. 
 
@@ -24,10 +23,7 @@ endpoints/postgresql                 10.129.3.75:5432    16m
 endpoints/rails-postgresql-example   10.128.2.184:8080   16m
 ```
 
-## **¿Why?**
-Helpful in conjunction with `kubectl` to take a "snapshot" of specific resources at that specific point in time and parse the same later on.
-
-## **¿How?**
+## **How it works?**
 - Via piped input:
 ```
 $ cat resources.yaml | koff get pod/postgresql-1-2gxpm svc/postgresql
