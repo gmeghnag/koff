@@ -36,3 +36,20 @@ Helpful in conjunction with `kubectl` to take a "snapshot" of specific resources
 ```
 go install github.com/gmeghnag/koff 
 ```
+### Download the latest binary
+```
+OS=Linux        # or Darwin
+curl -sL https://github.com/gmeghnag/omc/releases/latest/download/koff_${OS}_x86_64.tar.gz| tar xzf - koff
+chmod +x ./koff
+```
+### Build from source
+```
+$ git clone https://github.com/gmeghnag/koff.git
+$ cd koff/
+$ go install
+```
+
+## Upgrade
+It's possible to upgrade the tool to the latest version by running `koff upgrade --to=latest`
+
+
