@@ -149,7 +149,7 @@ func HandleObject(Koff *types.KoffCommand, obj unstructured.Unstructured) error 
 		if Koff.ShowManagedFields == false {
 			obj.SetManagedFields(nil)
 		}
-		Koff.UnstructuredList.Items = append(Koff.UnstructuredList.Items, obj.Object)
+		Koff.UnstructuredList.Items = append(Koff.UnstructuredList.Items, obj)
 		return nil
 	}
 	if Koff.OutputFormat == "name" {
