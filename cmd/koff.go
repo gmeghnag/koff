@@ -44,6 +44,9 @@ var RootCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if Koff.OutputFormat == "wide" {
+			Koff.Wide = true
+		}
 		if !terminal.IsTerminal(int(os.Stdin.Fd())) {
 			infile := os.Stdin
 			dataIn, _ = io.ReadAll(infile)
@@ -120,7 +123,6 @@ func init() {
 	RootCmd.Flags().BoolVarP(&Koff.ShowKind, "show-kind", "K", Koff.ShowKind, "Show kind.")
 	RootCmd.Flags().BoolVar(&Koff.ShowManagedFields, "show-managed-fields", Koff.ShowManagedFields, "Show managedFields when output is one of: json, yaml, jsonpath.")
 	RootCmd.Flags().BoolVarP(&Koff.ShowNamespace, "show-namespace", "N", Koff.ShowNamespace, "Show namespace.")
-	RootCmd.Flags().BoolVar(&Koff.Wide, "wide", Koff.Wide, "Show wide output.")
 	RootCmd.Flags().BoolVar(&Koff.NoHeaders, "no-headers", Koff.NoHeaders, "Hide headers.")
 	RootCmd.Flags().StringVarP(&Koff.OutputFormat, "output", "o", "", "Output format. One of: json|yaml|wide|jsonpath=...")
 	RootCmd.Flags().StringVarP(&Koff.Namespace, "namespace", "n", "", "Namespace.")

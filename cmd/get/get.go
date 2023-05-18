@@ -30,6 +30,9 @@ var yamlData []byte
 var GetCmd = &cobra.Command{
 	Use: "get",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if Koff.OutputFormat == "wide" {
+			Koff.Wide = true
+		}
 		koffConfigJson := types.Config{}
 		var dataIn []byte
 		if !terminal.IsTerminal(int(os.Stdin.Fd())) {
@@ -202,7 +205,6 @@ func init() {
 	GetCmd.Flags().BoolVarP(&Koff.ShowKind, "show-kind", "K", Koff.ShowKind, "Show kind.")
 	GetCmd.Flags().BoolVar(&Koff.ShowManagedFields, "show-managed-fields", Koff.ShowManagedFields, "Show managedFields when output is one of: json, yaml.")
 	GetCmd.Flags().BoolVarP(&Koff.ShowNamespace, "show-namespace", "N", Koff.ShowNamespace, "Show namespace.")
-	GetCmd.Flags().BoolVar(&Koff.Wide, "wide", Koff.Wide, "Show wide output.")
 	GetCmd.Flags().BoolVar(&Koff.NoHeaders, "no-headers", Koff.NoHeaders, "Hide headers.")
 	GetCmd.Flags().StringVarP(&Koff.OutputFormat, "output", "o", "", "Output format. One of: json|yaml|wide")
 	GetCmd.Flags().StringVarP(&Koff.Namespace, "namespace", "n", "", "Namespace.")
