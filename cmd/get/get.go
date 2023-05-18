@@ -149,7 +149,7 @@ func HandleObject(Koff *types.KoffCommand, obj unstructured.Unstructured) error 
 		if Koff.ShowManagedFields == false {
 			obj.SetManagedFields(nil)
 		}
-		Koff.UnstructuredList.Items = append(Koff.UnstructuredList.Items, obj)
+		Koff.UnstructuredList.Items = append(Koff.UnstructuredList.Items, obj.Object)
 		return nil
 	}
 	if Koff.OutputFormat == "name" {
@@ -220,7 +220,7 @@ func KoffToStdOut(*types.KoffCommand) error {
 	printer := cliprint.NewTablePrinter(cliprint.PrintOptions{NoHeaders: Koff.NoHeaders, Wide: Koff.Wide, WithNamespace: false, ShowLabels: false})
 	if Koff.OutputFormat == "json" {
 		if Koff.SingleResource && len(Koff.UnstructuredList.Items) == 1 {
-			data, _ := json.MarshalIndent(Koff.UnstructuredList.Items[0], "", "  ")
+			data, _ := json.MarshalIndent(Koff.UnstructuredList.Items[0].Object, "", "  ")
 			data = append(data, '\n')
 			fmt.Printf("%s", data)
 			return nil
@@ -232,7 +232,7 @@ func KoffToStdOut(*types.KoffCommand) error {
 		}
 	} else if Koff.OutputFormat == "yaml" {
 		if Koff.SingleResource && len(Koff.UnstructuredList.Items) == 1 {
-			data, _ := yaml.Marshal(Koff.UnstructuredList.Items[0])
+			data, _ := yaml.Marshal(Koff.UnstructuredList.Items[0].Object)
 			fmt.Printf("%s", data)
 			return nil
 		} else {
