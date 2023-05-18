@@ -39,7 +39,7 @@ go install github.com/gmeghnag/koff
 ### Download the latest binary
 ```
 OS=Linux        # or Darwin
-curl -sL https://github.com/gmeghnag/koff/releases/latest/download/koff_${OS}_x86_64.tar.gz| tar xzf - koff
+curl -sL "https://github.com/gmeghnag/koff/releases/latest/download/koff_${OS}_x86_64.tar.gz" | tar xzf - koff
 chmod +x ./koff
 ```
 ### Build from source
