@@ -76,6 +76,7 @@ type KoffCommand struct {
 	GetArgs           map[string]map[string]struct{}
 	AliasToCrd        map[string]apiextensionsv1.CustomResourceDefinition
 	ArgPresent        map[string]bool
+	IsBundle          bool
 }
 
 type UnstructuredList struct {

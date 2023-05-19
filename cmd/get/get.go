@@ -62,22 +62,12 @@ var GetCmd = &cobra.Command{
 			}
 			//resourceType, resourceGroup, err := helpers.RetrieveKindGroup()
 		} else if !Koff.FromInput && !koffConfigJson.InUse.IsBundle {
-			// TODO GESTISCI QUANDO non è UN BUNDLE KOFF
-			//for resourceArg := range Koff.GetArgs {
-			//	resourceType, _, err := helpers.RetrieveKindGroup(resourceArg, yamlData)
-			//	if err != nil {
-			//		resourceType, _, err = helpers.RetrieveKindGroupFromCRDS(resourceArg, yamlData)
-			//		if err != nil {
-			//			fmt.Println("ERRORREEE")
-			//		}
-			//	}
-			//}
+			Koff.IsBundle = false
 			err = HandleDataIn(dataIn, Koff)
 			if err != nil {
 				klog.V(1).ErrorS(err, "ERROR")
 				return err
 			}
-			//resourceType, resourceGroup, err := helpers.RetrieveKindGroup()
 		} else {
 			err = HandleDataIn(dataIn, Koff)
 			if err != nil {
@@ -126,20 +116,20 @@ func HandleDataIn(dataIn []byte, Koff *types.KoffCommand) error {
 }
 
 func HandleObject(Koff *types.KoffCommand, obj unstructured.Unstructured) error {
-	if Koff.FromInput && len(Koff.GetArgs) > 0 {
+	Koff.ArgPresent[strings.ToLower(obj.GetKind())] = true
+	if (Koff.FromInput || !Koff.IsBundle) && len(Koff.GetArgs) > 0 {
 		resourcesNames, resourceTypePresent := Koff.GetArgs[strings.ToLower(obj.GetKind())]
 		if !resourceTypePresent {
-			resourcesNames, resourceTypePresent = Koff.GetArgs[strings.ToLower(obj.GetKind()+"."+strings.Split(obj.GetAPIVersion(), "/")[0])]
-			if !resourceTypePresent {
+			_, resourceTypeWithGroupPresent := Koff.GetArgs[strings.ToLower(obj.GetKind()+"."+strings.Split(obj.GetAPIVersion(), "/")[0])]
+			if !resourceTypeWithGroupPresent && !resourceTypePresent {
 				return nil
 			}
 		}
-		Koff.ArgPresent[strings.ToLower(obj.GetKind())] = true
 		_, resourceNamePresent := Koff.GetArgs[strings.ToLower(obj.GetKind())][obj.GetName()]
 		if !resourceNamePresent {
 			extendedResourceKind := obj.GetKind() + "." + strings.Split(obj.GetAPIVersion(), "/")[0]
-			_, resourceNamePresent = Koff.GetArgs[strings.ToLower(extendedResourceKind)][obj.GetName()]
-			if !resourceNamePresent && len(resourcesNames) > 0 {
+			_, extendedResourceNamePresent := Koff.GetArgs[strings.ToLower(extendedResourceKind)][obj.GetName()]
+			if (!resourceNamePresent && !extendedResourceNamePresent) && len(resourcesNames) > 0 {
 				return nil
 			}
 		}
@@ -211,11 +201,13 @@ func init() {
 }
 
 func KoffToStdOut(*types.KoffCommand) error {
-	if !Koff.FromInput && len(Koff.GetArgs) > 0 {
+	//fmt.Println("Koff.GetArgs", Koff.GetArgs)
+	//fmt.Println("Koff.ArgPresent", Koff.ArgPresent)
+	if len(Koff.GetArgs) > 0 {
 		for resource := range Koff.ArgPresent {
 			exist, _ := Koff.ArgPresent[resource]
 			if !exist {
-				return fmt.Errorf(fmt.Sprintf("resource type \"%s\" not found.", resource))
+				return fmt.Errorf(fmt.Sprintf("resource type or alias \"%s\" not known.", resource))
 			}
 		}
 	}
@@ -226,10 +218,17 @@ func KoffToStdOut(*types.KoffCommand) error {
 			data = append(data, '\n')
 			fmt.Printf("%s", data)
 			return nil
-		} else {
+		} else if !Koff.SingleResource && len(Koff.UnstructuredList.Items) > 0 {
 			data, _ := json.MarshalIndent(Koff.UnstructuredList, "", "  ")
 			data = append(data, '\n')
 			fmt.Printf("%s", data)
+			return nil
+		} else {
+			if Koff.Namespace != "" {
+				fmt.Printf("No resources found in %s namespace.\n", Koff.Namespace)
+			} else {
+				fmt.Println("No resources found.")
+			}
 			return nil
 		}
 	} else if Koff.OutputFormat == "yaml" {
@@ -237,9 +236,16 @@ func KoffToStdOut(*types.KoffCommand) error {
 			data, _ := yaml.Marshal(Koff.UnstructuredList.Items[0].Object)
 			fmt.Printf("%s", data)
 			return nil
-		} else {
+		} else if !Koff.SingleResource && len(Koff.UnstructuredList.Items) > 0 {
 			data, _ := yaml.Marshal(Koff.UnstructuredList)
 			fmt.Printf("%s", data)
+			return nil
+		} else {
+			if Koff.Namespace != "" {
+				fmt.Printf("No resources found in %s namespace.\n", Koff.Namespace)
+			} else {
+				fmt.Println("No resources found.")
+			}
 			return nil
 		}
 	} else {
@@ -251,7 +257,15 @@ func KoffToStdOut(*types.KoffCommand) error {
 			}
 			Koff.Table = metav1.Table{}
 		}
-		Koff.Output.WriteTo(os.Stdout)
+		if Koff.Output.Len() == 0 {
+			if Koff.Namespace != "" {
+				fmt.Printf("No resources found in %s namespace.\n", Koff.Namespace)
+			} else {
+				fmt.Println("No resources found.")
+			}
+		} else {
+			Koff.Output.WriteTo(os.Stdout)
+		}
 		return nil
 	}
 }

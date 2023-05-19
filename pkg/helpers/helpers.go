@@ -129,33 +129,38 @@ func Exists(path string) (bool, error) {
 	}
 	return false, err
 }
-
 func ParseGetArgs(Koff *types.KoffCommand, args []string, yamlData []byte) error {
-
+	// koff get po || koff get po,svc
 	if len(args) == 1 && !strings.Contains(args[0], "/") {
 		if strings.Contains(args[0], ",") {
 			resourcesTypes := strings.Split(strings.TrimPrefix(strings.TrimSuffix(args[0], ","), ","), ",")
 			for _, resourceType := range resourcesTypes {
 				if strings.Contains(resourceType, ".") {
 					resourceType = strings.SplitN(resourceType, ".", 2)[0]
-				} else {
-					resourceType, _ = normalizeResourceAlias(Koff, strings.ToLower(resourceType), yamlData)
 				}
-				Koff.ArgPresent[resourceType] = false
-				Koff.GetArgs[resourceType] = make(map[string]struct{})
+				normalizedResourceAlias, err := normalizeResourceAlias(Koff, strings.ToLower(resourceType), yamlData)
+				if err == nil {
+					Koff.GetArgs[normalizedResourceAlias] = make(map[string]struct{})
+				} else {
+					Koff.ArgPresent[resourceType] = false
+					Koff.GetArgs[resourceType] = make(map[string]struct{})
+				}
+
 			}
 		} else {
 			resourceType := args[0]
 			if strings.Contains(args[0], ".") {
 				resourceType = strings.SplitN(args[0], ".", 2)[0]
-			} else {
-				resourceType, _ = normalizeResourceAlias(Koff, strings.ToLower(args[0]), yamlData)
 			}
-			Koff.ArgPresent[resourceType] = false
-			Koff.GetArgs[resourceType] = make(map[string]struct{})
+			normalizedResourceAlias, err := normalizeResourceAlias(Koff, resourceType, yamlData)
+			if err == nil {
+				Koff.GetArgs[normalizedResourceAlias] = make(map[string]struct{})
+			} else {
+				Koff.ArgPresent[resourceType] = false
+				Koff.GetArgs[resourceType] = make(map[string]struct{})
+			}
 		}
-	}
-	if len(args) > 0 && strings.Contains(args[0], "/") {
+	} else if len(args) > 0 && strings.Contains(args[0], "/") {
 		if len(args) == 1 {
 			Koff.SingleResource = true
 		}
@@ -165,35 +170,40 @@ func ParseGetArgs(Koff *types.KoffCommand, args []string, yamlData []byte) error
 				resourceType, resourceName := strings.ToLower(resource[0]), resource[1]
 				if strings.Contains(resourceType, ".") {
 					resourceType = strings.SplitN(resourceType, ".", 2)[0]
+				}
+				normalizedResourceAlias, err := normalizeResourceAlias(Koff, resourceType, yamlData)
+				if err == nil {
+					Koff.GetArgs[normalizedResourceAlias] = make(map[string]struct{})
+					Koff.GetArgs[normalizedResourceAlias][resourceName] = struct{}{}
 				} else {
-					resourceType, _ = normalizeResourceAlias(Koff, resourceType, yamlData)
-				}
-				Koff.ArgPresent[resourceType] = false
-				_, resourceTypeIsPresent := Koff.GetArgs[resourceType]
-				if !resourceTypeIsPresent {
+					Koff.ArgPresent[resourceType] = false
 					Koff.GetArgs[resourceType] = make(map[string]struct{})
+					Koff.GetArgs[resourceType][resourceName] = struct{}{}
 				}
-				Koff.GetArgs[resourceType][resourceName] = struct{}{}
 			} else {
 				return fmt.Errorf("there is no need to specify a resource type as a separate argument when passing arguments in resource/name form (e.g. 'oc get resource/<resource_name>' instead of 'oc get resource resource/<resource_name>'")
 			}
 		}
-	}
-	if len(args) > 1 && !strings.Contains(args[0], "/") {
+	} else if len(args) > 1 && !strings.Contains(args[0], "/") {
 		resourceType := strings.ToLower(args[0])
 		if strings.Contains(resourceType, ".") {
 			resourceType = strings.SplitN(resourceType, ".", 1)[0]
-		} else {
-			resourceType, _ = normalizeResourceAlias(Koff, resourceType, yamlData)
 		}
-		// TODO FARE LO STESSO ANCHE SOPRA EPOI QUANDO PASSI ATTRAVERSO OGNI OGGETTO QUESTO AGGIORNA LA MAP
-		Koff.ArgPresent[resourceType] = false
-		Koff.GetArgs[resourceType] = make(map[string]struct{})
+		normalizedResourceAlias, err := normalizeResourceAlias(Koff, resourceType, yamlData)
+		if err == nil {
+			Koff.GetArgs[normalizedResourceAlias] = make(map[string]struct{})
+		} else {
+			Koff.ArgPresent[resourceType] = false
+			Koff.GetArgs[resourceType] = make(map[string]struct{})
+		}
 		if len(args[0:]) == 2 {
 			Koff.SingleResource = true
 		}
 		for _, resourceName := range args[1:] {
-			Koff.GetArgs[resourceType][resourceName] = struct{}{}
+			if strings.Contains(resourceName, "/") {
+				return fmt.Errorf("there is no need to specify a resource type as a separate argument when passing arguments in resource/name form (e.g. 'oc get resource/<resource_name>' instead of 'oc get resource resource/<resource_name>'")
+			}
+			Koff.GetArgs[normalizedResourceAlias][resourceName] = struct{}{}
 		}
 	}
 	return nil
@@ -209,11 +219,11 @@ func normalizeResourceAlias(koff *types.KoffCommand, alias string, yamlData []by
 	_ = yaml.Unmarshal(yamlData, &knownResources)
 	value, ok := knownResources[alias]
 	if ok {
-		klog.V(3).Info("INFO ", fmt.Sprintf("Found alias \"%s\" in known-resources.", alias))
+		klog.V(3).Info("INFO ", fmt.Sprintf("Alias \"%s\" is a known resource.", alias))
 		resourceType := value["name"].(string)
 		return resourceType, nil
 	} else {
-		klog.V(3).Info("INFO ", fmt.Sprintf("Alias \"%s\" not found in known-resources.", alias))
+		klog.V(3).Info("INFO ", fmt.Sprintf("Alias \"%s\" resource not known.", alias))
 		crd, ok := koff.AliasToCrd[alias]
 		if ok {
 			_crd := &apiextensionsv1.CustomResourceDefinition{Spec: crd.Spec}
