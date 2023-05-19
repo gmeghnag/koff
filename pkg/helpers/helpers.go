@@ -129,8 +129,12 @@ func Exists(path string) (bool, error) {
 	}
 	return false, err
 }
-func ParseGetArgs(Koff *types.KoffCommand, args []string, yamlData []byte) error {
-	// koff get po || koff get po,svc
+func ParseGetArgs(Koff *types.KoffCommand, args []string) error {
+	var _args []string
+	for _, arg := range args {
+		_args = append(_args, strings.ToLower(arg))
+	}
+	args = _args
 	if len(args) == 1 && !strings.Contains(args[0], "/") {
 		if strings.Contains(args[0], ",") {
 			resourcesTypes := strings.Split(strings.TrimPrefix(strings.TrimSuffix(args[0], ","), ","), ",")
@@ -138,7 +142,7 @@ func ParseGetArgs(Koff *types.KoffCommand, args []string, yamlData []byte) error
 				if strings.Contains(resourceType, ".") {
 					resourceType = strings.SplitN(resourceType, ".", 2)[0]
 				}
-				normalizedResourceAlias, err := normalizeResourceAlias(Koff, strings.ToLower(resourceType), yamlData)
+				normalizedResourceAlias, err := normalizeResourceAlias(Koff, resourceType)
 				if err == nil {
 					Koff.GetArgs[normalizedResourceAlias] = make(map[string]struct{})
 				} else {
@@ -152,7 +156,7 @@ func ParseGetArgs(Koff *types.KoffCommand, args []string, yamlData []byte) error
 			if strings.Contains(args[0], ".") {
 				resourceType = strings.SplitN(args[0], ".", 2)[0]
 			}
-			normalizedResourceAlias, err := normalizeResourceAlias(Koff, resourceType, yamlData)
+			normalizedResourceAlias, err := normalizeResourceAlias(Koff, resourceType)
 			if err == nil {
 				Koff.GetArgs[normalizedResourceAlias] = make(map[string]struct{})
 			} else {
@@ -167,11 +171,11 @@ func ParseGetArgs(Koff *types.KoffCommand, args []string, yamlData []byte) error
 		for _, arg := range args {
 			if strings.Contains(arg, "/") {
 				resource := strings.Split(arg, "/")
-				resourceType, resourceName := strings.ToLower(resource[0]), resource[1]
+				resourceType, resourceName := resource[0], resource[1]
 				if strings.Contains(resourceType, ".") {
 					resourceType = strings.SplitN(resourceType, ".", 2)[0]
 				}
-				normalizedResourceAlias, err := normalizeResourceAlias(Koff, resourceType, yamlData)
+				normalizedResourceAlias, err := normalizeResourceAlias(Koff, resourceType)
 				if err == nil {
 					Koff.GetArgs[normalizedResourceAlias] = make(map[string]struct{})
 					Koff.GetArgs[normalizedResourceAlias][resourceName] = struct{}{}
@@ -185,11 +189,11 @@ func ParseGetArgs(Koff *types.KoffCommand, args []string, yamlData []byte) error
 			}
 		}
 	} else if len(args) > 1 && !strings.Contains(args[0], "/") {
-		resourceType := strings.ToLower(args[0])
+		resourceType := args[0]
 		if strings.Contains(resourceType, ".") {
 			resourceType = strings.SplitN(resourceType, ".", 1)[0]
 		}
-		normalizedResourceAlias, err := normalizeResourceAlias(Koff, resourceType, yamlData)
+		normalizedResourceAlias, err := normalizeResourceAlias(Koff, resourceType)
 		if err == nil {
 			Koff.GetArgs[normalizedResourceAlias] = make(map[string]struct{})
 		} else {
@@ -209,15 +213,8 @@ func ParseGetArgs(Koff *types.KoffCommand, args []string, yamlData []byte) error
 	return nil
 }
 
-type ResourceInfo struct {
-	Group string `yaml:"Group"`
-	Name  string `yaml:"Name"`
-}
-
-func normalizeResourceAlias(koff *types.KoffCommand, alias string, yamlData []byte) (string, error) {
-	var knownResources map[string]map[string]interface{}
-	_ = yaml.Unmarshal(yamlData, &knownResources)
-	value, ok := knownResources[alias]
+func normalizeResourceAlias(koff *types.KoffCommand, alias string) (string, error) {
+	value, ok := koff.KnownResources[alias]
 	if ok {
 		klog.V(3).Info("INFO ", fmt.Sprintf("Alias \"%s\" is a known resource.", alias))
 		resourceType := value["name"].(string)
@@ -237,14 +234,13 @@ func normalizeResourceAlias(koff *types.KoffCommand, alias string, yamlData []by
 	return alias, fmt.Errorf("Alias \"%s\" not identified as any known resource or custom resource.", alias)
 }
 
-func RetrieveKindGroup(alias string, yamlData []byte) (string, string, error) {
+func RetrieveKindGroup(koff *types.KoffCommand, alias string) (string, string, error) {
 	//if strings.Contains(alias, ".") {
 	//	resourceKindAndGroup := strings.SplitN(alias, ".", 1)
 	//	return resourceKindAndGroup[0], resourceKindAndGroup[1], nil
 	//}
-	var knownResources map[string]map[string]interface{}
-	_ = yaml.Unmarshal(yamlData, &knownResources)
-	value, ok := knownResources[alias]
+
+	value, ok := koff.KnownResources[alias]
 	if ok {
 		klog.V(3).Info("INFO ", fmt.Sprintf("found alias \"%s\" in known-resources.yaml", alias))
 		resourceName := value["name"].(string)

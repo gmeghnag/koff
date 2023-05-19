@@ -6,6 +6,7 @@ import (
 
 	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,6 +19,8 @@ import (
 	//"k8s.io/apimachinery/pkg/api/meta"
 	//runtime "k8s.io/apimachinery/pkg/runtime"
 	//utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+
+	_ "embed"
 
 	appsv1printer "github.com/openshift/openshift-apiserver/pkg/apps/printers/internalversion"
 	authorizationprinters "github.com/openshift/openshift-apiserver/pkg/authorization/printers/internalversion"
@@ -41,6 +44,9 @@ import (
 	cliprint "k8s.io/cli-runtime/pkg/printers"
 )
 
+//go:embed known-resources.yaml
+var yamlData []byte
+
 func NewKoffCommand() *KoffCommand {
 	koff := &KoffCommand{}
 	koff.InitializeSchema()
@@ -50,6 +56,8 @@ func NewKoffCommand() *KoffCommand {
 	koff.GetArgs = make(map[string]map[string]struct{})
 	koff.AliasToCrd = make(map[string]apiextensionsv1.CustomResourceDefinition)
 	koff.ArgPresent = make(map[string]bool)
+	koff.KnownResources = make(map[string]map[string]interface{})
+	_ = yaml.Unmarshal(yamlData, koff.KnownResources)
 	return koff
 }
 
@@ -77,6 +85,7 @@ type KoffCommand struct {
 	AliasToCrd        map[string]apiextensionsv1.CustomResourceDefinition
 	ArgPresent        map[string]bool
 	IsBundle          bool
+	KnownResources    map[string]map[string]interface{}
 }
 
 type UnstructuredList struct {

@@ -24,9 +24,6 @@ import (
 
 var Koff = types.NewKoffCommand()
 
-//go:embed known-resources.yaml
-var yamlData []byte
-
 var GetCmd = &cobra.Command{
 	Use: "get",
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -45,7 +42,7 @@ var GetCmd = &cobra.Command{
 			_ = json.Unmarshal([]byte(file), &koffConfigJson)
 			dataIn, _ = ioutil.ReadFile(koffConfigJson.InUse.Path)
 		}
-		err := helpers.ParseGetArgs(Koff, args, yamlData)
+		err := helpers.ParseGetArgs(Koff, args)
 		if err != nil {
 			klog.V(1).ErrorS(err, "ERROR")
 			return err
@@ -53,7 +50,7 @@ var GetCmd = &cobra.Command{
 		if !Koff.FromInput && koffConfigJson.InUse.IsBundle {
 			// TODO GESTISCI QUANDO è UN BUNDLE KOFF
 			for resourceArg := range Koff.GetArgs {
-				resourceType, resourceGroup, err := helpers.RetrieveKindGroup(resourceArg, yamlData)
+				resourceType, resourceGroup, err := helpers.RetrieveKindGroup(Koff, resourceArg)
 				if err != nil {
 					klog.V(1).ErrorS(err, "ERROR")
 					return err
@@ -87,14 +84,14 @@ var GetCmd = &cobra.Command{
 
 func HandleDataIn(dataIn []byte, Koff *types.KoffCommand) error {
 	unstructuredObject := &unstructured.Unstructured{}
-	err := yaml.Unmarshal([]byte(dataIn), &unstructuredObject)
+	err := yaml.Unmarshal(dataIn, &unstructuredObject)
 	if err != nil {
 		klog.V(1).ErrorS(err, "ERROR")
 		return err
 	}
 	if unstructuredObject.IsList() {
 		unstructuredList := &unstructured.UnstructuredList{}
-		err = yaml.Unmarshal([]byte(dataIn), &unstructuredList)
+		err = yaml.Unmarshal(dataIn, &unstructuredList)
 		if err != nil {
 			klog.V(1).ErrorS(err, "ERROR")
 			return err
@@ -159,19 +156,27 @@ func HandleObject(Koff *types.KoffCommand, obj unstructured.Unstructured) error 
 		return err
 	}
 	klog.V(3).Info("INFO deserializing ", obj.GetKind(), " ", obj.GetName())
-	runtimeObjectType := deserializer.RawObjectToRuntimeObject(rawObject, Koff.Schema)
-	if err := yaml.Unmarshal([]byte(rawObject), runtimeObjectType); err != nil {
-		klog.V(3).Info(err, err.Error())
-	}
-	objectTable, err := tablegenerator.InternalResourceTable(Koff, runtimeObjectType, &obj)
-	if err != nil {
-		klog.V(3).Info("INFO ", fmt.Sprintf("%s: %s, %s", err.Error(), obj.GetKind(), obj.GetAPIVersion()))
+	var objectTable *metav1.Table
+	_, ok := Koff.KnownResources[strings.ToLower(obj.GetKind())]
+	if ok {
+		runtimeObjectType := deserializer.RawObjectToRuntimeObject(rawObject, Koff.Schema)
+		if err := yaml.Unmarshal([]byte(rawObject), runtimeObjectType); err != nil {
+			klog.V(3).Info(err, err.Error())
+		}
+		objectTable, err = tablegenerator.InternalResourceTable(Koff, runtimeObjectType, &obj)
+		if err != nil {
+			klog.V(3).Info("INFO ", fmt.Sprintf("%s: %s, %s", err.Error(), obj.GetKind(), obj.GetAPIVersion()))
+			klog.V(1).ErrorS(err, err.Error())
+			return err
+		}
+	} else {
 		objectTable, err = tablegenerator.GenerateCustomResourceTable(Koff, obj)
 		if err != nil {
 			klog.V(1).ErrorS(err, err.Error())
 			return err
 		}
 	}
+
 	if Koff.CurrentKind == obj.GetObjectKind().GroupVersionKind().Kind {
 		Koff.Table.Rows = append(Koff.Table.Rows, objectTable.Rows...)
 	} else {
