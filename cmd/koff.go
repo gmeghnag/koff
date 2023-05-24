@@ -23,6 +23,7 @@ import (
 	"os/user"
 	"path/filepath"
 
+	"github.com/gmeghnag/koff/cmd/etcd"
 	"github.com/gmeghnag/koff/cmd/get"
 	"github.com/gmeghnag/koff/cmd/upgrade"
 	"github.com/gmeghnag/koff/types"
@@ -134,6 +135,7 @@ func init() {
 		UseCmd,
 		upgrade.Upgrade,
 		VersionCmd,
+		etcd.EtcdCmd,
 	)
 }
 

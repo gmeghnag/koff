@@ -233,6 +233,21 @@ svc:
   name: service
   namespaced: true
   plural: services
+poddisruptionbudget:
+  group: policy
+  name: poddisruptionbudget
+  namespaced: true
+  plural: poddisruptionbudgets
+pdb:
+  group: policy
+  name: poddisruptionbudget
+  namespaced: true
+  plural: poddisruptionbudgets
+poddisruptionbudgets:
+  group: policy
+  name: poddisruptionbudget
+  namespaced: true
+  plural: poddisruptionbudgets
 mutatingwebhookconfiguration:
   group: admissionregistration.k8s.io
   name: mutatingwebhookconfiguration

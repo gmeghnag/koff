@@ -241,7 +241,7 @@ func KoffToStdOut(*types.KoffCommand) error {
 			data, _ := yaml.Marshal(Koff.UnstructuredList.Items[0].Object)
 			fmt.Printf("%s", data)
 			return nil
-		} else if !Koff.SingleResource && len(Koff.UnstructuredList.Items) > 0 {
+		} else if len(Koff.UnstructuredList.Items) > 0 {
 			data, _ := yaml.Marshal(Koff.UnstructuredList)
 			fmt.Printf("%s", data)
 			return nil
