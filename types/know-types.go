@@ -71,7 +71,6 @@ func addCertificatesTypes(scheme *runtime.Scheme) error {
 	GroupVersion := schema.GroupVersion{Group: "certificates.k8s.io", Version: "v1"}
 	types := []runtime.Object{
 		&certificates.CertificateSigningRequest{},
-		&certificates.ClusterTrustBundle{},
 	}
 	scheme.AddKnownTypes(GroupVersion, types...)
 	return nil
@@ -198,7 +197,6 @@ func addNetworkingTypes(scheme *runtime.Scheme) error {
 	GroupVersion := schema.GroupVersion{Group: "networking.k8s.io", Version: "v1"}
 	types := []runtime.Object{
 		&networking.ClusterCIDR{},
-		&networking.IPAddress{},
 		&networking.IngressClass{},
 		&networking.Ingress{},
 		&networking.NetworkPolicy{},
@@ -290,7 +288,6 @@ func addResourceV1A2Types(scheme *runtime.Scheme) error {
 		&resource.ResourceClass{},
 		&resource.ResourceClaim{},
 		&resource.ResourceClaimTemplate{},
-		&resource.PodSchedulingContext{},
 	}
 	scheme.AddKnownTypes(GroupVersion, types...)
 	return nil

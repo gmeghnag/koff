@@ -111,8 +111,6 @@ func RawObjectToRuntimeObject(rawObject []byte, schema *runtime.Scheme) runtime.
 		return &build.BuildConfig{}
 	case *certificates.CertificateSigningRequest:
 		return &certificates.CertificateSigningRequest{}
-	case *certificates.ClusterTrustBundle:
-		return &certificates.ClusterTrustBundle{}
 	case *coordination.Lease:
 		return &coordination.Lease{}
 	case *corev1.Pod:
@@ -161,8 +159,6 @@ func RawObjectToRuntimeObject(rawObject []byte, schema *runtime.Scheme) runtime.
 		return &imagev1.ImageTag{}
 	case *networking.ClusterCIDR:
 		return &networking.ClusterCIDR{}
-	case *networking.IPAddress:
-		return &networking.IPAddress{}
 	case *networking.IngressClass:
 		return &networking.IngressClass{}
 	case *networking.Ingress:
@@ -187,8 +183,6 @@ func RawObjectToRuntimeObject(rawObject []byte, schema *runtime.Scheme) runtime.
 		return &resource.ResourceClaim{}
 	case *resource.ResourceClaimTemplate:
 		return &resource.ResourceClaimTemplate{}
-	case *resource.PodSchedulingContext:
-		return &resource.PodSchedulingContext{}
 	case *rbac.ClusterRole:
 		return &rbac.ClusterRole{}
 	case *rbac.ClusterRoleBinding:

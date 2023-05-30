@@ -40,5 +40,6 @@ func Install(scheme *runtime.Scheme) {
 	utilruntime.Must(v2.AddToScheme(scheme))
 	utilruntime.Must(v2beta1.AddToScheme(scheme))
 	utilruntime.Must(v1.AddToScheme(scheme))
-	utilruntime.Must(scheme.SetVersionPriority(v2.SchemeGroupVersion, v1.SchemeGroupVersion, v2beta1.SchemeGroupVersion, v2beta2.SchemeGroupVersion))
+	// TODO: move v2 to the front of the list in 1.24
+	utilruntime.Must(scheme.SetVersionPriority(v1.SchemeGroupVersion, v2.SchemeGroupVersion, v2beta1.SchemeGroupVersion, v2beta2.SchemeGroupVersion))
 }

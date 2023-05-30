@@ -28,7 +28,7 @@ type Lease struct {
 	// +optional
 	metav1.ObjectMeta
 
-	// spec contains the specification of the Lease.
+	// Specification of the Lease.
 	// +optional
 	Spec LeaseSpec
 }
@@ -40,7 +40,7 @@ type LeaseSpec struct {
 	HolderIdentity *string
 	// leaseDurationSeconds is a duration that candidates for a lease need
 	// to wait to force acquire it. This is measure against time of last
-	// observed renewTime.
+	// observed RenewTime.
 	// +optional
 	LeaseDurationSeconds *int32
 	// acquireTime is a time when the current lease was acquired.
@@ -64,6 +64,6 @@ type LeaseList struct {
 	// +optional
 	metav1.ListMeta
 
-	// items is a list of schema objects.
+	// Items is a list of schema objects.
 	Items []Lease
 }
