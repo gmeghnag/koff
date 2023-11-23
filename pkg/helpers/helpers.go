@@ -177,7 +177,10 @@ func ParseGetArgs(Koff *types.KoffCommand, args []string) error {
 				}
 				normalizedResourceAlias, err := normalizeResourceAlias(Koff, resourceType)
 				if err == nil {
-					Koff.GetArgs[normalizedResourceAlias] = make(map[string]struct{})
+					_, ok := Koff.GetArgs[normalizedResourceAlias]
+					if !ok {
+						Koff.GetArgs[normalizedResourceAlias] = make(map[string]struct{})
+					}
 					Koff.GetArgs[normalizedResourceAlias][resourceName] = struct{}{}
 				} else {
 					Koff.ArgPresent[resourceType] = false
