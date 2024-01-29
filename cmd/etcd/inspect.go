@@ -1,6 +1,22 @@
+/*
+Copyright 2017 The Kubernetes Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package etcd
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -13,43 +29,21 @@ import (
 	"github.com/spf13/cobra"
 	bolt "go.etcd.io/bbolt"
 	"go.etcd.io/etcd/api/v3/mvccpb"
+	"sigs.k8s.io/yaml"
 )
 
-var restoreDataDir, restoreWalDir, restoreCluster, restoreClusterToken, restorePeerURLs, restoreName string
-var skipHashCheck bool
+var output bytes.Buffer
 
 const (
-	defaultName                     = "default"
-	defaultInitialAdvertisePeerURLs = "http://localhost:2380"
+	StorageBinaryMediaType = "application/vnd.kubernetes.storagebinary"
+	ProtobufMediaType      = "application/vnd.kubernetes.protobuf"
+	YamlMediaType          = "application/yaml"
+	JsonMediaType          = "application/json"
 )
 
-func initialClusterFromName(name string) string {
-	n := name
-	if name == "" {
-		n = defaultName
-	}
-	return fmt.Sprintf("%s=http://localhost:2380", n)
-}
-
-//func NewSnapshotRestoreCommand() *cobra.Command {
-//	cmd := &cobra.Command{
-//		Use:  "inspect <etcd db filename>",
-//		RunE: snapshotRestoreCommandFunc,
-//	}
-//	cmd.Flags().StringVarP(&OutputFormat, "write-out", "w", "protobuf", "set the output format (fields, json, simple, table)")
-//
-//	//cmd.Flags().StringVar(&restoreDataDir, "data-dir", "", "Path to the output data directory")
-//	//cmd.Flags().StringVar(&restoreWalDir, "wal-dir", "", "Path to the WAL directory (use --data-dir if none given)")
-//	//cmd.Flags().StringVar(&restoreCluster, "initial-cluster", initialClusterFromName(defaultName), "Initial cluster configuration for restore bootstrap")
-//	//cmd.Flags().StringVar(&restoreClusterToken, "initial-cluster-token", "etcd-cluster", "Initial cluster token for the etcd cluster during restore bootstrap")
-//	//cmd.Flags().StringVar(&restorePeerURLs, "initial-advertise-peer-urls", defaultInitialAdvertisePeerURLs, "List of this member's peer URLs to advertise to the rest of the cluster")
-//	//cmd.Flags().StringVar(&restoreName, "name", defaultName, "Human-readable name for this member")
-//	//cmd.Flags().BoolVar(&skipHashCheck, "skip-hash-check", false, "Ignore snapshot integrity hash value (required if copied from data directory)")
-//
-//	//cmd.MarkFlagRequired("data-dir")
-//
-//	return cmd
-//}
+var (
+	keyName, formatOutput string
+)
 
 var Inspect = &cobra.Command{
 
@@ -65,7 +59,9 @@ var Inspect = &cobra.Command{
 	},
 }
 
-var keyName string
+func init() {
+	Inspect.PersistentFlags().StringVarP(&formatOutput, "output", "o", "json", "Output format. One of: json|yaml")
+}
 
 func inspectEtcd(args []string) error {
 	if len(args) == 0 {
@@ -99,6 +95,7 @@ func inspectEtcd(args []string) error {
 			return fmt.Errorf("snapshot file integrity check failed. %d errors found.\n"+strings.Join(dbErrStrings, "\n"), len(dbErrStrings))
 		}
 		c := tx.Cursor()
+		//var out string
 		for next, _ := c.First(); next != nil; next, _ = c.Next() {
 			if string(next) == "key" {
 				b := tx.Bucket(next)
@@ -119,13 +116,31 @@ func inspectEtcd(args []string) error {
 							unstruct := &unstructured.Unstructured{}
 							err := unstruct.UnmarshalJSON(kv.Value)
 							if err == nil {
-								data, _ := json.MarshalIndent(unstruct, "", "  ")
-								data = append(data, '\n')
-								fmt.Printf("%s", data)
-								return nil
+								if formatOutput == "json" {
+									data, _ := json.MarshalIndent(unstruct, "", "  ")
+									data = append(data, '\n')
+									fmt.Printf("%s", data)
+									return nil
+								} else if formatOutput == "yaml" {
+									data, _ := yaml.Marshal(unstruct)
+									fmt.Printf("%s", data)
+								}
+
 							}
-							fmt.Println("THE FOLLOWING OUTPUT IS NOT WELL FORMATTED, USE IT WITH CAUTION:")
-							fmt.Println(string(kv.Value))
+							if formatOutput == "json" {
+								_, err = DetectAndConvert(JsonMediaType, kv.Value, &output)
+								err := unstruct.UnmarshalJSON(output.Bytes())
+								if err == nil {
+									data, _ := json.MarshalIndent(unstruct, "", "  ")
+									data = append(data, '\n')
+									fmt.Printf("%s", data)
+									return nil
+								}
+							} else if formatOutput == "yaml" {
+								_, err = DetectAndConvert(YamlMediaType, kv.Value, &output)
+								fmt.Printf("%s", &output)
+							}
+							os.Exit(0)
 						}
 					} else {
 						fmt.Println(string(kv.Key))

@@ -20,10 +20,11 @@ import (
 	"k8s.io/kubernetes/pkg/apis/resource"
 	"k8s.io/kubernetes/pkg/apis/scheduling"
 
+	templateapi "github.com/openshift/openshift-apiserver/pkg/template/apis/template"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	discovery "k8s.io/kubernetes/pkg/apis/discovery"
 	storage "k8s.io/kubernetes/pkg/apis/storage"
-
-	templateapi "github.com/openshift/openshift-apiserver/pkg/template/apis/template"
 
 	"github.com/openshift/openshift-apiserver/pkg/build/apis/build"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -71,6 +72,24 @@ func addCertificatesTypes(scheme *runtime.Scheme) error {
 	GroupVersion := schema.GroupVersion{Group: "certificates.k8s.io", Version: "v1"}
 	types := []runtime.Object{
 		&certificates.CertificateSigningRequest{},
+	}
+	scheme.AddKnownTypes(GroupVersion, types...)
+	return nil
+}
+
+func addApiextensionsTypes(scheme *runtime.Scheme) error {
+	GroupVersion := schema.GroupVersion{Group: "apiextensions.k8s.io", Version: "v1"}
+	types := []runtime.Object{
+		&apiextensionsv1.CustomResourceDefinition{},
+	}
+	scheme.AddKnownTypes(GroupVersion, types...)
+	return nil
+}
+
+func addApiextensionsV1Beta1Types(scheme *runtime.Scheme) error {
+	GroupVersion := schema.GroupVersion{Group: "apiextensions.k8s.io", Version: "v1beta1"}
+	types := []runtime.Object{
+		&apiextensionsv1beta1.CustomResourceDefinition{},
 	}
 	scheme.AddKnownTypes(GroupVersion, types...)
 	return nil

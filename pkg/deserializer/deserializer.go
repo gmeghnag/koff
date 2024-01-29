@@ -44,6 +44,8 @@ import (
 	runtime "k8s.io/apimachinery/pkg/runtime"
 
 	//
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	admissionregistration "k8s.io/kubernetes/pkg/apis/admissionregistration"
 	apiserverinternal "k8s.io/kubernetes/pkg/apis/apiserverinternal"
 	apps "k8s.io/kubernetes/pkg/apis/apps"
@@ -75,6 +77,10 @@ func RawObjectToRuntimeObject(rawObject []byte, schema *runtime.Scheme) runtime.
 		return &admissionregistration.ValidatingAdmissionPolicy{}
 	case *apiregistration.APIService:
 		return &apiregistration.APIService{}
+	case *apiextensionsv1.CustomResourceDefinition:
+		return &apiextensionsv1.CustomResourceDefinition{}
+	case *apiextensionsv1beta1.CustomResourceDefinition:
+		return &apiextensionsv1beta1.CustomResourceDefinition{}
 	case *apiserverinternal.StorageVersion:
 		return &apiserverinternal.StorageVersion{}
 	case *apps.StatefulSet:

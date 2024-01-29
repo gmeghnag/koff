@@ -117,6 +117,8 @@ func (Koff *KoffCommand) InitializeSchema() {
 		apiregistration.AddToScheme,
 	}
 	_ = addAdmissionRegistrationTypes(Koff.Schema)
+	_ = addApiextensionsTypes(Koff.Schema)
+	_ = addApiextensionsV1Beta1Types(Koff.Schema)
 	_ = addApiServerInternalTypes(Koff.Schema)
 	_ = addApiRegistrationTypes(Koff.Schema)
 	_ = addAppsTypes(Koff.Schema)
@@ -144,7 +146,7 @@ func (Koff *KoffCommand) InitializeSchema() {
 	_ = addSecurityV1Types(Koff.Schema)
 	_ = addStorageV1Types(Koff.Schema)
 	_ = addStorageV1B1Types(Koff.Schema)
-	_ = addTemplateV1Types(Koff.Schema)
+	_ = (Koff.Schema)
 	utilruntime.Must(schemeBuilder.AddToScheme(Koff.Schema))
 }
 
