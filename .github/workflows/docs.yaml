@@ -1,8 +1,9 @@
 name: docs 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - v0.**
+      - v1.**
 permissions:
   contents: write
 jobs:

@@ -1,4 +1,6 @@
 # `koff`
+[![GitHub Actions Build Status](https://github.com/gmeghnag/koff/actions/workflows/build.yml/badge.svg)](https://github.com/gmeghnag/koff/actions?query=workflow%3ABuild)
+![Downloads](https://img.shields.io/github/downloads/gmeghnag/koff/total)
 <img src="./docs/images/preview.png" width="100%">
 
 `koff` is a command-line tool that process kuberntes `yaml` manifests and return their appropriate tabular format, as well as `yaml` or `json`.
