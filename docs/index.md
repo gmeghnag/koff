@@ -43,6 +43,24 @@ service/postgresql   ClusterIP   172.30.58.223   <none>        5432/TCP   16m
   NAME                 TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
   service/postgresql   ClusterIP   172.30.58.223   <none>        5432/TCP   16m
   ```
+- Using an etcd snapshot to get the Kubernetes object contained in it via `koff etcd inspect`:
+  ```
+  $ koff etcd inspect etcd_snap.db /kubernetes.io/pods/openshift-etcd/testocp-bqgqk-master-0-debug -o yaml
+  apiVersion: v1
+  kind: Pod
+  metadata:
+    annotations:
+      debug.openshift.io/source-container: container-00
+      debug.openshift.io/source-resource: /v1, Resource=nodes/testocp-bqgqk-master-0
+    creationTimestamp: "1995-01-17T00:0:00Z"
+    ...
+    ...
+
+  $ koff etcd inspect etcd_snap.db /kubernetes.io/pods/openshift-etcd/testocp-bqgqk-master-0-debug | koff
+  NAME                                    READY   STATUS    RESTARTS   AGE
+  pod/testocp-bqgqk-master-0-debug        0/1     Pending   0          22h
+
+  ```
 ???+ tip "Dealing with Custom Resources"
 
     To return a [*custom resource*](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) table in its default tabular format it's needed to add the respective `CustomResourceDefinition` `yaml` manifest into the path `~/.koff/customresourcedefinition`.<br />

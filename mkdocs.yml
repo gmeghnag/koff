@@ -15,6 +15,7 @@ nav:
     - install/upgrade.md
   - 'Subcommands':
     - koff get: subcmds/get.md
+    - koff etcd: subcmds/etcd.md
 
 extra_css:
     - 'css/extra.css'
@@ -44,7 +45,7 @@ theme:
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
-    - scheme: default
+    - scheme: slate
       primary: blue
       accent: blue
       toggle:
