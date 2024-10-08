@@ -29,7 +29,7 @@ import (
 	"github.com/gmeghnag/koff/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	cliprint "k8s.io/cli-runtime/pkg/printers"
@@ -48,12 +48,12 @@ var RootCmd = &cobra.Command{
 		if Koff.OutputFormat == "wide" {
 			Koff.Wide = true
 		}
-		if !terminal.IsTerminal(int(os.Stdin.Fd())) {
+		if !term.IsTerminal(int(os.Stdin.Fd())) {
 			infile := os.Stdin
 			dataIn, _ = io.ReadAll(infile)
 			Koff.FromInput = true
 		} else {
-			return fmt.Errorf("expected kubernetes resource/s from piped input, not found.")
+			return fmt.Errorf("expected kubernetes resource/s from piped input, not found")
 		}
 		unstructuredObject := &unstructured.Unstructured{}
 		err := yaml.Unmarshal([]byte(dataIn), &unstructuredObject)

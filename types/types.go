@@ -6,9 +6,10 @@ import (
 
 	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"go.etcd.io/bbolt"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	metav1beta1 "k8s.io/apimachinery/pkg/apis/meta/v1beta1"
@@ -57,6 +58,8 @@ func NewKoffCommand() *KoffCommand {
 	koff.AliasToCrd = make(map[string]apiextensionsv1.CustomResourceDefinition)
 	koff.ArgPresent = make(map[string]bool)
 	koff.KnownResources = make(map[string]map[string]interface{})
+	koff.KubeKeysToEtcdKeys = make(map[string][]byte)
+	koff.EtcdAliasToCrdKubeKey = make(map[string]AliasSubField)
 	_ = yaml.Unmarshal(yamlData, koff.KnownResources)
 	return koff
 }
@@ -80,18 +83,33 @@ type KoffCommand struct {
 	ShowKind          bool
 	ShowNamespace     bool
 	ShowManagedFields bool
+	AllNamespaces     bool
 	OutputFormat      string
 	GetArgs           map[string]map[string]struct{}
 	AliasToCrd        map[string]apiextensionsv1.CustomResourceDefinition
 	ArgPresent        map[string]bool
 	IsBundle          bool
+	IsEtcdDb          bool
 	KnownResources    map[string]map[string]interface{}
+	// when parsing etcd db
+	EtcdAliasToCrdKubeKey map[string]AliasSubField
+	KubeKeysToEtcdKeys    map[string][]byte
+	EtcdDb                *bbolt.DB
+	EtcdKubeKeysToGet     []string
 }
 
 type UnstructuredList struct {
 	ApiVersion string                      `json:"apiVersion"`
 	Kind       string                      `json:"kind"`
 	Items      []unstructured.Unstructured `json:"items"`
+}
+
+type AliasSubField struct {
+	Kind       string `json:"kind"`
+	Plural     string `json:"plural"`
+	Namespaced bool   `json:"namespaced"`
+	KubeKey    string `json:"kubeKey"`
+	Group      string `json:"group"`
 }
 
 func (Koff *KoffCommand) InitializeTableGenerator() {
@@ -165,6 +183,7 @@ type Config struct {
 
 type InUse struct {
 	Path      string `json:"path"`
-	IsBundle  bool   `json:"isBudle"`
+	IsBundle  bool   `json:"isBundle"`
+	IsEtcdDb  bool   `json:"isEtcDb"`
 	Namespace string `json:"namespace"`
 }

@@ -18,7 +18,6 @@ package koff
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -31,9 +30,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var isKoffBundle bool
+var isKoffBundle, isEtcDb bool
 
-func useContext(path string, koffConfigFile string, idFlag string) {
+func useContext(path string, koffConfigFile string) {
 	//if path != "" {
 	//	if !filepath.IsAbs(path) {
 	//		fmt.Println("error: \"" + path + "\" is not an absolute path.")
@@ -42,6 +41,9 @@ func useContext(path string, koffConfigFile string, idFlag string) {
 	//}
 	// read json koffConfigFile
 
+	if strings.HasSuffix(path, ".db") {
+		isEtcDb = true
+	}
 	isDir, _ := helpers.IsDirectory(path)
 	if isDir {
 		_path, err := findKoffBundleIn(path)
@@ -53,15 +55,15 @@ func useContext(path string, koffConfigFile string, idFlag string) {
 		path = strings.TrimSuffix(path, "/")
 	}
 
-	file, _ := ioutil.ReadFile(koffConfigFile)
+	file, _ := os.ReadFile(koffConfigFile)
 	koffConfigJson := types.Config{}
 	_ = json.Unmarshal([]byte(file), &koffConfigJson)
 
 	config := types.Config{}
-	config.InUse = types.InUse{Path: path, Namespace: "", IsBundle: isKoffBundle}
+	config.InUse = types.InUse{Path: path, Namespace: "", IsBundle: isKoffBundle, IsEtcdDb: isEtcDb}
 
 	file, _ = json.MarshalIndent(config, "", " ")
-	_ = ioutil.WriteFile(koffConfigFile, file, 0644)
+	_ = os.WriteFile(koffConfigFile, file, 0644)
 
 }
 
@@ -72,7 +74,7 @@ func findKoffBundleIn(path string) (string, error) {
 	var retErr error
 	timeStampFound := false
 	namespacesFolderFound := false
-	files, err := ioutil.ReadDir(path)
+	files, err := os.ReadDir(path)
 	if err != nil {
 		return "", err
 	}
@@ -92,13 +94,13 @@ func findKoffBundleIn(path string) (string, error) {
 		return retPath + "/", retErr
 	}
 	if timeStampFound && (numDirs > 1 || numDirs == 0) {
-		return path, fmt.Errorf("Expected one directory in path: \"%s\", found: %s.", path, strconv.Itoa(numDirs))
+		return path, fmt.Errorf("expected one directory in path: \"%s\", found: %s", path, strconv.Itoa(numDirs))
 	}
 	if !timeStampFound && numDirs == 1 {
 		retPath, retErr = findKoffBundleIn(path + "/" + dirName)
 	}
 	if !timeStampFound && !namespacesFolderFound {
-		return path, fmt.Errorf("Timestamp and namespace folder not found")
+		return path, fmt.Errorf("timestamp and namespace folder not found")
 	}
 	return retPath + "/", retErr
 }
@@ -108,10 +110,9 @@ var UseCmd = &cobra.Command{
 	Use:   "use",
 	Short: "Select the resource to inspect",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		idFlag, _ := cmd.Flags().GetString("id")
 		path := ""
 		if len(args) > 1 || len(args) == 0 {
-			return fmt.Errorf(fmt.Sprintf("expect one arguemnt, found: %v", len(args)))
+			return fmt.Errorf("expect one arguemnt, found: %v", len(args))
 
 		} else {
 			path = args[0]
@@ -125,16 +126,16 @@ var UseCmd = &cobra.Command{
 			fileInfo, err := os.Stat(path)
 			if err != nil {
 				if os.IsNotExist(err) {
-					return fmt.Errorf("file \"%s\" does not exist.", path)
+					return fmt.Errorf("file \"%s\" does not exist", path)
 				} else {
 					return fmt.Errorf("%s", err)
 				}
 			}
 			if !fileInfo.Mode().IsRegular() {
-				return fmt.Errorf("\"%s\" is not a regular file.", path)
+				return fmt.Errorf("\"%s\" is not a regular file", path)
 			}
 		}
-		useContext(path, "/Users/gmeghnag/.koff/koff.json", idFlag)
+		useContext(path, "/Users/gmeghnag/.koff/koff.json")
 		return nil
 	},
 }

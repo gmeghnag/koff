@@ -33,7 +33,7 @@ import (
 	//core "k8s.io/kubernetes/pkg/apis/core"
 	//ocpinternal "github.com/openshift/openshift-apiserver/pkg/apps/printers/internalversion"
 	// cliprint "k8s.io/cli-runtime/pkg/printers"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	//
 )
 
@@ -226,7 +226,7 @@ func normalizeResourceAlias(koff *types.KoffCommand, alias string) (string, erro
 		klog.V(3).Info("INFO ", fmt.Sprintf("Alias \"%s\" resource not known.", alias))
 		crd, ok := koff.AliasToCrd[alias]
 		if ok {
-			_crd := &apiextensionsv1.CustomResourceDefinition{Spec: crd.Spec}
+			_crd := &apiextensionsv1beta1.CustomResourceDefinition{Spec: crd.Spec}
 			return strings.ToLower(_crd.Spec.Names.Kind), nil
 		}
 		resourceType, _, err := RetrieveKindGroupFromCRDS(koff, alias)
@@ -234,7 +234,7 @@ func normalizeResourceAlias(koff *types.KoffCommand, alias string) (string, erro
 			return resourceType, nil
 		}
 	}
-	return alias, fmt.Errorf("Alias \"%s\" not identified as any known resource or custom resource.", alias)
+	return alias, fmt.Errorf("alias \"%s\" not identified as any known resource or custom resource", alias)
 }
 
 func RetrieveKindGroup(koff *types.KoffCommand, alias string) (string, string, error) {
@@ -251,35 +251,115 @@ func RetrieveKindGroup(koff *types.KoffCommand, alias string) (string, string, e
 		return resourceName, resourceGroup, nil
 	}
 	klog.V(3).Info("INFO ", fmt.Sprintf("No internal resource found with name or alias \"%s\"", alias))
-	return alias, "", fmt.Errorf("No internal resource found with name or alias \"%s\"", alias)
+	return alias, "", fmt.Errorf("no internal resource found with name or alias \"%s\"", alias)
 }
-func RetrieveKindGroupFromCRDS(koff *types.KoffCommand, alias string) (string, string, error) {
-	home, _ := os.UserHomeDir()
-	crdsPath := home + "/.koff/customresourcedefinitions/"
 
-	_, err := Exists(crdsPath)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
+func RetrieveKindPluralGroupNamespaced(koff *types.KoffCommand, alias string) (string, string, bool, error) {
+	//if strings.Contains(alias, ".") {
+	//	resourceKindAndGroup := strings.SplitN(alias, ".", 1)
+	//	return resourceKindAndGroup[0], resourceKindAndGroup[1], nil
+	//}
+
+	value, ok := koff.KnownResources[alias]
+	if ok {
+		klog.V(3).Info("INFO ", fmt.Sprintf("found alias \"%s\" in known-resources.yaml", alias))
+		resourceName := value["plural"].(string)
+		resourceGroup := value["group"].(string)
+		resourceNamespaced := value["namespaced"].(bool)
+		return resourceName, resourceGroup, resourceNamespaced, nil
 	}
-	crds, _ := ioutil.ReadDir(crdsPath)
-	for _, f := range crds {
-		crdYamlPath := crdsPath + f.Name()
-		crdByte, _ := ioutil.ReadFile(crdYamlPath)
-		_crd := &apiextensionsv1.CustomResourceDefinition{}
-		if err := yaml.Unmarshal([]byte(crdByte), &_crd); err != nil {
-			continue
+	klog.V(3).Info("INFO ", fmt.Sprintf("No internal resource found with name or alias \"%s\"", alias))
+	return alias, "", false, fmt.Errorf("no internal resource found with name or alias \"%s\"", alias)
+}
+
+func RetrieveKindGroupFromCRDS(koff *types.KoffCommand, alias string) (string, string, error) {
+	if koff.IsEtcdDb {
+		aliasFields, ok := koff.EtcdAliasToCrdKubeKey[alias]
+		if ok {
+			return strings.ToLower(aliasFields.Kind), aliasFields.Group, nil
 		}
-		koff.AliasToCrd[strings.ToLower(_crd.Spec.Names.Kind)] = apiextensionsv1.CustomResourceDefinition{Spec: _crd.Spec}
-		if strings.ToLower(_crd.Spec.Names.Kind) == alias || strings.ToLower(_crd.Spec.Names.Plural) == alias || strings.ToLower(_crd.Spec.Names.Singular) == alias || StringInSlice(alias, _crd.Spec.Names.ShortNames) || _crd.Spec.Names.Singular+"."+_crd.Spec.Group == alias {
-			koff.AliasToCrd[alias] = apiextensionsv1.CustomResourceDefinition{Spec: _crd.Spec}
-			klog.V(4).Info("INFO ", fmt.Sprintf("Alias  \"%s\" found in path \"%s\".", alias, crdYamlPath))
-			return strings.ToLower(_crd.Spec.Names.Kind), _crd.Spec.Group, nil
+		return alias, "", fmt.Errorf("no customResource found with name or alias \"%s\"in etcd db: ", alias)
+	} else {
+		home, _ := os.UserHomeDir()
+		crdsPath := home + "/.koff/customresourcedefinitions/"
+
+		_, err := Exists(crdsPath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err.Error())
+			os.Exit(1)
 		}
-		klog.V(5).Info("INFO ", fmt.Sprintf("Alias \"%s\" not found in path \"%s\".", alias, crdYamlPath))
+		crds, _ := ioutil.ReadDir(crdsPath)
+		for _, f := range crds {
+			crdYamlPath := crdsPath + f.Name()
+			crdByte, _ := ioutil.ReadFile(crdYamlPath)
+			_crd := &apiextensionsv1beta1.CustomResourceDefinition{}
+			if err := yaml.Unmarshal([]byte(crdByte), &_crd); err != nil {
+				continue
+			}
+			koff.AliasToCrd[strings.ToLower(_crd.Spec.Names.Kind)] = apiextensionsv1beta1.CustomResourceDefinition{Spec: _crd.Spec}
+			if strings.ToLower(_crd.Spec.Names.Kind) == alias || strings.ToLower(_crd.Spec.Names.Plural) == alias || strings.ToLower(_crd.Spec.Names.Singular) == alias || StringInSlice(alias, _crd.Spec.Names.ShortNames) || _crd.Spec.Names.Singular+"."+_crd.Spec.Group == alias {
+				koff.AliasToCrd[alias] = apiextensionsv1beta1.CustomResourceDefinition{Spec: _crd.Spec}
+				klog.V(4).Info("INFO ", fmt.Sprintf("Alias  \"%s\" found in path \"%s\".", alias, crdYamlPath))
+				return strings.ToLower(_crd.Spec.Names.Kind), _crd.Spec.Group, nil
+			}
+			klog.V(5).Info("INFO ", fmt.Sprintf("Alias \"%s\" not found in path \"%s\".", alias, crdYamlPath))
+		}
+		klog.V(4).Info("INFO ", fmt.Sprintf("No customResource found with name or alias \"%s\" in path: \"%s\".", alias, crdsPath))
+		return alias, "", fmt.Errorf("no customResource found with name or alias \"%s\"in path: \"%s\"", alias, crdsPath)
 	}
-	klog.V(4).Info("INFO ", fmt.Sprintf("No customResource found with name or alias \"%s\" in path: \"%s\".", alias, crdsPath))
-	return alias, "", fmt.Errorf("No customResource found with name or alias \"%s\"in path: \"%s\".", alias, crdsPath)
+}
+
+func EtcdPrefixFromAlias(koff *types.KoffCommand, alias string, resourceName string) (string, error) {
+	var etcdPrefixResource string
+	value, ok := koff.KnownResources[alias]
+	if ok {
+		klog.V(3).Info("INFO ", fmt.Sprintf("Alias \"%s\" is a known resource.", alias))
+		resourceNamePlural := value["plural"].(string)
+		resourceGroup := value["group"].(string)
+		resourceNamespaced := value["namespaced"].(bool)
+		if strings.HasSuffix(resourceGroup, "openshift.io") {
+			etcdPrefixResource = "/openshift.io/" + resourceGroup + "/" + resourceNamePlural
+		} else {
+			if resourceGroup == "core" || resourceGroup == "events.k8s.io" || resourceGroup == "apps" {
+				if resourceNamePlural == "services" {
+					etcdPrefixResource = "/kubernetes.io/services/specs"
+				} else if resourceNamePlural == "endpoints" {
+					etcdPrefixResource = "/kubernetes.io/services/endpoints"
+				} else {
+					etcdPrefixResource = "/kubernetes.io/" + resourceNamePlural
+				}
+			} else {
+				etcdPrefixResource = "/kubernetes.io/" + resourceGroup + "/" + resourceNamePlural
+			}
+		}
+		if !koff.AllNamespaces {
+			if resourceNamespaced {
+				etcdPrefixResource += "/" + koff.Namespace
+			}
+			if resourceName != "" {
+				etcdPrefixResource += "/" + resourceName
+			}
+		}
+		return etcdPrefixResource, nil
+	} else {
+		aliasFields, ok := koff.EtcdAliasToCrdKubeKey[alias]
+		if ok {
+			if koff.AllNamespaces {
+				etcdPrefixResource = "/kubernetes.io/" + aliasFields.Group + "/" + aliasFields.Plural
+			} else {
+				if aliasFields.Namespaced {
+					etcdPrefixResource = "/kubernetes.io/" + aliasFields.Group + "/" + aliasFields.Plural + "/" + koff.Namespace
+				} else {
+					etcdPrefixResource = "/kubernetes.io/" + aliasFields.Group + "/" + aliasFields.Plural
+				}
+				if resourceName != "" {
+					etcdPrefixResource += "/" + resourceName
+				}
+			}
+			return etcdPrefixResource, nil
+		}
+	}
+	return "", fmt.Errorf("alias \"%s\" not identified as any known resource or custom resource", alias)
 }
 
 func StringInSlice(a string, list []string) bool {

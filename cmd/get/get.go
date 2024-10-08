@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/gmeghnag/koff/pkg/deserializer"
@@ -14,6 +14,7 @@ import (
 	"github.com/gmeghnag/koff/pkg/tablegenerator"
 	"github.com/gmeghnag/koff/types"
 	"github.com/spf13/cobra"
+	bolt "go.etcd.io/bbolt"
 	"golang.org/x/crypto/ssh/terminal"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -38,17 +39,64 @@ var GetCmd = &cobra.Command{
 			Koff.FromInput = true
 		} else {
 			// gestire le eccezioni se il file non esiste ecc..
-			file, _ := ioutil.ReadFile("/Users/gmeghnag/.koff/koff.json")
+			file, _ := os.ReadFile("/Users/gmeghnag/.koff/koff.json")
 			_ = json.Unmarshal([]byte(file), &koffConfigJson)
-			dataIn, _ = ioutil.ReadFile(koffConfigJson.InUse.Path)
+			dataIn, _ = os.ReadFile(koffConfigJson.InUse.Path)
 		}
-		err := helpers.ParseGetArgs(Koff, args)
-		if err != nil {
-			klog.V(1).ErrorS(err, "ERROR")
-			return err
+		if !Koff.FromInput && koffConfigJson.InUse.IsEtcdDb {
+			// QUANDO è UN DB ETCD
+			Koff.IsEtcdDb = true
+			var err error
+			Koff.EtcdDb, err = bolt.Open(koffConfigJson.InUse.Path, 0400, &bolt.Options{ReadOnly: true})
+			if err != nil {
+				fmt.Println("error trying to read", koffConfigJson.InUse.Path, "as boltdb file.")
+				return err
+			}
+			defer Koff.EtcdDb.Close()
+			populateCRDsFromEtcd(Koff, koffConfigJson.InUse.Path, args[0])
+			err = helpers.ParseGetArgs(Koff, args)
+			//fmt.Println(Koff.EtcdAliasToCrdKubeKey)
+			if err != nil {
+				klog.V(1).ErrorS(err, "ERROR")
+				return err
+			}
+			EtcdKeyPrefixesToCheck := make(map[string]bool)
+			for resourType := range Koff.GetArgs {
+				if len(Koff.GetArgs[resourType]) == 0 {
+					x, err := helpers.EtcdPrefixFromAlias(Koff, resourType, "")
+					if err != nil {
+						return err
+					}
+					EtcdKeyPrefixesToCheck[x] = false
+				} else {
+					for resourName := range Koff.GetArgs[resourType] {
+						x, err := helpers.EtcdPrefixFromAlias(Koff, resourType, resourName)
+						if err != nil {
+							return err
+						}
+						EtcdKeyPrefixesToCheck[x] = false
+					}
+				}
+				//GetResourcesFor(Koff, resourType)
+			}
+			GetResourcesFromEtcd(Koff, EtcdKeyPrefixesToCheck)
+			sort.Strings(Koff.EtcdKubeKeysToGet)
+			for i, kubeKey := range Koff.EtcdKubeKeysToGet {
+				//fmt.Println(Koff.EtcdKubeKeysToGet[i-1], kubeKey)
+				// remove duplicated kubeKey (I don't know why but some keys are duplicated)
+				if i == 0 || Koff.EtcdKubeKeysToGet[i-1] != kubeKey {
+					handleKubeKey(Koff, kubeKey)
+				}
+			}
 		}
 		if !Koff.FromInput && koffConfigJson.InUse.IsBundle {
 			// TODO GESTISCI QUANDO è UN BUNDLE KOFF
+			fmt.Println("bundle koff")
+			err := helpers.ParseGetArgs(Koff, args)
+			if err != nil {
+				klog.V(1).ErrorS(err, "ERROR")
+				return err
+			}
 			for resourceArg := range Koff.GetArgs {
 				resourceType, resourceGroup, err := helpers.RetrieveKindGroup(Koff, resourceArg)
 				if err != nil {
@@ -58,14 +106,24 @@ var GetCmd = &cobra.Command{
 				fmt.Println("+++", resourceType, resourceGroup)
 			}
 			//resourceType, resourceGroup, err := helpers.RetrieveKindGroup()
-		} else if !Koff.FromInput && !koffConfigJson.InUse.IsBundle {
+		} else if !Koff.FromInput && !koffConfigJson.InUse.IsBundle && !koffConfigJson.InUse.IsEtcdDb {
+			err := helpers.ParseGetArgs(Koff, args)
+			if err != nil {
+				klog.V(1).ErrorS(err, "ERROR")
+				return err
+			}
 			Koff.IsBundle = false
 			err = HandleDataIn(dataIn, Koff)
 			if err != nil {
 				klog.V(1).ErrorS(err, "ERROR")
 				return err
 			}
-		} else {
+		} else if !koffConfigJson.InUse.IsBundle && !koffConfigJson.InUse.IsEtcdDb {
+			err := helpers.ParseGetArgs(Koff, args)
+			if err != nil {
+				klog.V(1).ErrorS(err, "ERROR")
+				return err
+			}
 			err = HandleDataIn(dataIn, Koff)
 			if err != nil {
 				klog.V(1).ErrorS(err, "ERROR")
@@ -73,7 +131,7 @@ var GetCmd = &cobra.Command{
 			}
 		}
 
-		err = KoffToStdOut(Koff)
+		err := KoffToStdOut(Koff)
 		if err != nil {
 			klog.V(2).ErrorS(err, "ERROR")
 			return err
@@ -136,7 +194,7 @@ func HandleObject(Koff *types.KoffCommand, obj unstructured.Unstructured) error 
 	}
 	Koff.LastKind = obj.GetKind()
 	if Koff.OutputFormat == "yaml" || Koff.OutputFormat == "json" {
-		if Koff.ShowManagedFields == false {
+		if !Koff.ShowManagedFields {
 			obj.SetManagedFields(nil)
 		}
 		Koff.UnstructuredList.Items = append(Koff.UnstructuredList.Items, obj)
@@ -200,6 +258,7 @@ func init() {
 	GetCmd.Flags().BoolVarP(&Koff.ShowKind, "show-kind", "K", Koff.ShowKind, "Show kind.")
 	GetCmd.Flags().BoolVar(&Koff.ShowManagedFields, "show-managed-fields", Koff.ShowManagedFields, "Show managedFields when output is one of: json, yaml.")
 	GetCmd.Flags().BoolVarP(&Koff.ShowNamespace, "show-namespace", "N", Koff.ShowNamespace, "Show namespace.")
+	GetCmd.Flags().BoolVarP(&Koff.AllNamespaces, "all-namespaces", "A", Koff.ShowNamespace, "Show resources across all namespaces.")
 	GetCmd.Flags().BoolVar(&Koff.NoHeaders, "no-headers", Koff.NoHeaders, "Hide headers.")
 	GetCmd.Flags().StringVarP(&Koff.OutputFormat, "output", "o", "", "Output format. One of: json|yaml|wide")
 	GetCmd.Flags().StringVarP(&Koff.Namespace, "namespace", "n", "", "Namespace.")
@@ -212,7 +271,7 @@ func KoffToStdOut(*types.KoffCommand) error {
 		for resource := range Koff.ArgPresent {
 			exist, _ := Koff.ArgPresent[resource]
 			if !exist {
-				return fmt.Errorf(fmt.Sprintf("resource type or alias \"%s\" not known.", resource))
+				return fmt.Errorf("resource type or alias \"%s\" not known", resource)
 			}
 		}
 	}
