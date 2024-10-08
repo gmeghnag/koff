@@ -135,7 +135,8 @@ var UseCmd = &cobra.Command{
 				return fmt.Errorf("\"%s\" is not a regular file", path)
 			}
 		}
-		useContext(path, "/Users/gmeghnag/.koff/koff.json")
+		home, _ := os.UserHomeDir()
+		useContext(path, home+"/.koff/koff.json")
 		return nil
 	},
 }

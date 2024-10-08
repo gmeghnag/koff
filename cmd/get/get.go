@@ -39,7 +39,8 @@ var GetCmd = &cobra.Command{
 			Koff.FromInput = true
 		} else {
 			// gestire le eccezioni se il file non esiste ecc..
-			file, _ := os.ReadFile("/Users/gmeghnag/.koff/koff.json")
+			home, _ := os.UserHomeDir()
+			file, _ := os.ReadFile(home + "/.koff/koff.json")
 			_ = json.Unmarshal([]byte(file), &koffConfigJson)
 			dataIn, _ = os.ReadFile(koffConfigJson.InUse.Path)
 		}
