@@ -6,6 +6,7 @@ import (
 	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiregistration "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
+	"k8s.io/kubernetes/pkg/apis/networking"
 	nodeapi "k8s.io/kubernetes/pkg/apis/node"
 
 	appsv1 "github.com/openshift/openshift-apiserver/pkg/apps/apis/apps"
@@ -18,8 +19,10 @@ import (
 	//rbac "k8s.io/api/rbac/v1"
 
 	"k8s.io/kubernetes/pkg/apis/coordination"
-	"k8s.io/kubernetes/pkg/apis/networking"
+	"k8s.io/kubernetes/pkg/apis/policy"
 	"k8s.io/kubernetes/pkg/apis/rbac"
+	networkingv1_28 "k8s.io/kubernetes/v1_28/pkg/apis/networking"
+	policyv1_28 "k8s.io/kubernetes/v1_28/pkg/apis/policy"
 
 	template "github.com/openshift/openshift-apiserver/pkg/template/apis/template"
 	storage "k8s.io/kubernetes/pkg/apis/storage"
@@ -54,9 +57,9 @@ import (
 	certificates "k8s.io/kubernetes/pkg/apis/certificates"
 	discovery "k8s.io/kubernetes/pkg/apis/discovery"
 	flowcontrol "k8s.io/kubernetes/pkg/apis/flowcontrol"
-	policy "k8s.io/kubernetes/pkg/apis/policy"
 	resource "k8s.io/kubernetes/pkg/apis/resource"
 	scheduling "k8s.io/kubernetes/pkg/apis/scheduling"
+	resourcev1_30 "k8s.io/kubernetes/v1_30/pkg/apis/resource"
 )
 
 func RawObjectToRuntimeObject(rawObject []byte, schema *runtime.Scheme) runtime.Object {
@@ -163,8 +166,8 @@ func RawObjectToRuntimeObject(rawObject []byte, schema *runtime.Scheme) runtime.
 		return &imagev1.ImageStreamTag{}
 	case *imagev1.ImageTag:
 		return &imagev1.ImageTag{}
-	case *networking.ClusterCIDR:
-		return &networking.ClusterCIDR{}
+	case *networkingv1_28.ClusterCIDR:
+		return &networkingv1_28.ClusterCIDR{}
 	case *networking.IngressClass:
 		return &networking.IngressClass{}
 	case *networking.Ingress:
@@ -175,16 +178,16 @@ func RawObjectToRuntimeObject(rawObject []byte, schema *runtime.Scheme) runtime.
 		return &nodeapi.RuntimeClass{}
 	case *policy.PodDisruptionBudget:
 		return &policy.PodDisruptionBudget{}
-	case *policy.PodSecurityPolicy:
-		return &policy.PodSecurityPolicy{}
+	case *policyv1_28.PodSecurityPolicy:
+		return &policyv1_28.PodSecurityPolicy{}
 	case *project.Project:
 		return &project.Project{}
 	case *project.ProjectRequest:
 		return &project.ProjectRequest{}
 	case *quotav1.AppliedClusterResourceQuota:
 		return &quotav1.AppliedClusterResourceQuota{}
-	case *resource.ResourceClass:
-		return &resource.ResourceClass{}
+	case *resourcev1_30.ResourceClass:
+		return &resourcev1_30.ResourceClass{}
 	case *resource.ResourceClaim:
 		return &resource.ResourceClaim{}
 	case *resource.ResourceClaimTemplate:
