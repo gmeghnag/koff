@@ -1,0 +1,72 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    operator.tekton.dev/last-applied-hash: 9e7b9b021c49f16e507fd9031644c8cb48526b74aac7e9cd1e41da08ee034aaf
+  creationTimestamp: "2024-12-30T09:24:53Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/instance: default
+    app.kubernetes.io/part-of: tekton-triggers
+    operator.tekton.dev/operand-name: tektoncd-triggers
+    triggers.tekton.dev/release: v0.30.0
+    version: v0.30.0
+  name: clusterinterceptors.triggers.tekton.dev
+  ownerReferences:
+  - apiVersion: operator.tekton.dev/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: TektonTrigger
+    name: trigger
+    uid: 4ca66f38-f13a-47e0-8d6e-5b7f76f3f2a1
+  resourceVersion: "8119282"
+  uid: 01f7ad43-ed95-437b-81da-e80ad3d95f22
+spec:
+  conversion:
+    strategy: None
+  group: triggers.tekton.dev
+  names:
+    categories:
+    - tekton
+    - tekton-triggers
+    kind: ClusterInterceptor
+    listKind: ClusterInterceptorList
+    plural: clusterinterceptors
+    shortNames:
+    - ci
+    singular: clusterinterceptor
+  scope: Cluster
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    categories:
+    - tekton
+    - tekton-triggers
+    kind: ClusterInterceptor
+    listKind: ClusterInterceptorList
+    plural: clusterinterceptors
+    shortNames:
+    - ci
+    singular: clusterinterceptor
+  conditions:
+  - lastTransitionTime: "2024-12-30T09:24:53Z"
+    message: no conflicts found
+    reason: NoConflicts
+    status: "True"
+    type: NamesAccepted
+  - lastTransitionTime: "2024-12-30T09:24:53Z"
+    message: the initial names have been accepted
+    reason: InitialNamesAccepted
+    status: "True"
+    type: Established
+  storedVersions:
+  - v1alpha1

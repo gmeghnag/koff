@@ -1,0 +1,113 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    operator.tekton.dev/last-applied-hash: c3227f775be452335777949e48ac71275aa4bd03d56d70d43bece6e22c83b6a9
+  creationTimestamp: "2024-12-30T09:24:53Z"
+  generation: 1
+  labels:
+    app.kubernetes.io/instance: default
+    app.kubernetes.io/part-of: tekton-triggers
+    operator.tekton.dev/operand-name: tektoncd-triggers
+    triggers.tekton.dev/release: v0.30.0
+    version: v0.30.0
+  name: eventlisteners.triggers.tekton.dev
+  ownerReferences:
+  - apiVersion: operator.tekton.dev/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: TektonTrigger
+    name: trigger
+    uid: 4ca66f38-f13a-47e0-8d6e-5b7f76f3f2a1
+  resourceVersion: "8119292"
+  uid: a5bc29f3-5388-4c1a-9da7-e8cccb80049a
+spec:
+  conversion:
+    strategy: None
+  group: triggers.tekton.dev
+  names:
+    categories:
+    - tekton
+    - tekton-triggers
+    kind: EventListener
+    listKind: EventListenerList
+    plural: eventlisteners
+    shortNames:
+    - el
+    singular: eventlistener
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.address.url
+      name: Address
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Available')].status
+      name: Available
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Available')].reason
+      name: Reason
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].reason
+      name: Reason
+      type: string
+    name: v1beta1
+    schema:
+      openAPIV3Schema:
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
+    served: true
+    storage: true
+    subresources:
+      status: {}
+  - additionalPrinterColumns:
+    - jsonPath: .status.address.url
+      name: Address
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Available')].status
+      name: Available
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Available')].reason
+      name: Reason
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].reason
+      name: Reason
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
+    served: true
+    storage: false
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    categories:
+    - tekton
+    - tekton-triggers
+    kind: EventListener
+    listKind: EventListenerList
+    plural: eventlisteners
+    shortNames:
+    - el
+    singular: eventlistener
+  conditions:
+  - lastTransitionTime: "2024-12-30T09:24:53Z"
+    message: no conflicts found
+    reason: NoConflicts
+    status: "True"
+    type: NamesAccepted
+  - lastTransitionTime: "2024-12-30T09:24:53Z"
+    message: the initial names have been accepted
+    reason: InitialNamesAccepted
+    status: "True"
+    type: Established
+  storedVersions:
+  - v1beta1

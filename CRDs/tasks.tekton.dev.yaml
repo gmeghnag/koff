@@ -1,0 +1,88 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    operator.tekton.dev/last-applied-hash: f9fd726131ae88fd8958dc249ec9d61112f20ee5f0902fea3750e5484e18e892
+  creationTimestamp: "2024-12-30T09:24:04Z"
+  generation: 3
+  labels:
+    app.kubernetes.io/instance: default
+    app.kubernetes.io/part-of: tekton-pipelines
+    operator.tekton.dev/operand-name: tektoncd-pipelines
+    pipeline.tekton.dev/release: v0.65.4
+    version: v0.65.4
+  name: tasks.tekton.dev
+  ownerReferences:
+  - apiVersion: operator.tekton.dev/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: TektonPipeline
+    name: pipeline
+    uid: 47cb9b8d-f31b-4464-ac21-ef0df4bb1934
+  resourceVersion: "14151481"
+  uid: cddd52a8-d883-4551-a539-e2374c90dd07
+spec:
+  conversion:
+    strategy: Webhook
+    webhook:
+      clientConfig:
+        caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUN6VENDQW5PZ0F3SUJBZ0lRQTBYTG1ySG5HYmNkM2RLelg3K1piVEFLQmdncWhrak9QUVFEQWpCUk1SUXcKRWdZRFZRUUtFd3RyYm1GMGFYWmxMbVJsZGpFNU1EY0dBMVVFQXhNd2RHVnJkRzl1TFhCcGNHVnNhVzVsY3kxMwpaV0pvYjI5ckxtOXdaVzV6YUdsbWRDMXdhWEJsYkdsdVpYTXVjM1pqTUI0WERUSTFNREV3TlRFMU1qUXpObG9YCkRUSTFNREV4TWpFMU1qUXpObG93VVRFVU1CSUdBMVVFQ2hNTGEyNWhkR2wyWlM1a1pYWXhPVEEzQmdOVkJBTVQKTUhSbGEzUnZiaTF3YVhCbGJHbHVaWE10ZDJWaWFHOXZheTV2Y0dWdWMyaHBablF0Y0dsd1pXeHBibVZ6TG5OMgpZekJaTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEEwSUFCQXVJNEQ1bWEweUZaak8zZ3NyWkVUemZRZG84CnVhc0g0UkxlbElqdXBvSUpPeGNoalQ5a0VER3lWakhKNnNSb2R2RmIzbG9QUHhZSWlLZ095RVI3YTBpamdnRXIKTUlJQkp6QU9CZ05WSFE4QkFmOEVCQU1DQW9Rd0hRWURWUjBsQkJZd0ZBWUlLd1lCQlFVSEF3RUdDQ3NHQVFVRgpCd01DTUE4R0ExVWRFd0VCL3dRRk1BTUJBZjh3SFFZRFZSME9CQllFRkkwWFZTeHlyRkU2MG4xVitLaGxmNzQ0CjhDVFVNSUhGQmdOVkhSRUVnYjB3Z2JxQ0dIUmxhM1J2Ymkxd2FYQmxiR2x1WlhNdGQyVmlhRzl2YTRJc2RHVnIKZEc5dUxYQnBjR1ZzYVc1bGN5MTNaV0pvYjI5ckxtOXdaVzV6YUdsbWRDMXdhWEJsYkdsdVpYT0NNSFJsYTNSdgpiaTF3YVhCbGJHbHVaWE10ZDJWaWFHOXZheTV2Y0dWdWMyaHBablF0Y0dsd1pXeHBibVZ6TG5OMlk0SStkR1ZyCmRHOXVMWEJwY0dWc2FXNWxjeTEzWldKb2IyOXJMbTl3Wlc1emFHbG1kQzF3YVhCbGJHbHVaWE11YzNaakxtTnMKZFhOMFpYSXViRzlqWVd3d0NnWUlLb1pJemowRUF3SURTQUF3UlFJaEFKdWo3Qm1rZXZWVFQrN1NIOUg5bnRyVQpmSFVqczlPL2RCb3RiVjZzVUZFOEFpQXVtYVdkM09zMDBLTjRTZkQ5b3dWMWt3SXh2am9hZEY4NEczSDJJR09XCjZnPT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=
+        service:
+          name: tekton-pipelines-webhook
+          namespace: openshift-pipelines
+          path: /resource-conversion
+          port: 443
+      conversionReviewVersions:
+      - v1beta1
+      - v1
+  group: tekton.dev
+  names:
+    categories:
+    - tekton
+    - tekton-pipelines
+    kind: Task
+    listKind: TaskList
+    plural: tasks
+    singular: task
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
+    served: true
+    storage: false
+    subresources:
+      status: {}
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    categories:
+    - tekton
+    - tekton-pipelines
+    kind: Task
+    listKind: TaskList
+    plural: tasks
+    singular: task
+  conditions:
+  - lastTransitionTime: "2024-12-30T09:24:04Z"
+    message: no conflicts found
+    reason: NoConflicts
+    status: "True"
+    type: NamesAccepted
+  - lastTransitionTime: "2024-12-30T09:24:04Z"
+    message: the initial names have been accepted
+    reason: InitialNamesAccepted
+    status: "True"
+    type: Established
+  storedVersions:
+  - v1

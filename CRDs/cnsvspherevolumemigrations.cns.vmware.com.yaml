@@ -1,0 +1,80 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.6.2
+  creationTimestamp: "2024-12-16T02:40:13Z"
+  generation: 1
+  name: cnsvspherevolumemigrations.cns.vmware.com
+  resourceVersion: "12771"
+  uid: 4739de05-9f60-440f-8a1c-adb19c7481c6
+spec:
+  conversion:
+    strategy: None
+  group: cns.vmware.com
+  names:
+    kind: CnsVSphereVolumeMigration
+    listKind: CnsVSphereVolumeMigrationList
+    plural: cnsvspherevolumemigrations
+    singular: cnsvspherevolumemigration
+  scope: Cluster
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: CnsVSphereVolumeMigration is the Schema for the cnsvspherevolumemigrations
+          API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: CnsVSphereVolumeMigrationSpec defines the desired state of
+              CnsVSphereVolumeMigration
+            properties:
+              protectvolumefromvmdelete:
+                description: protect volume from vm deletion after vmdk is migrated
+                  to CSI
+                type: boolean
+              volumeid:
+                description: VolumeID is the FCD ID obtained after register volume
+                  with CNS.
+                type: string
+              volumepath:
+                description: VolumePath is the vmdk path of the vSphere Volume
+                type: string
+            required:
+            - volumeid
+            - volumepath
+            type: object
+        type: object
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: CnsVSphereVolumeMigration
+    listKind: CnsVSphereVolumeMigrationList
+    plural: cnsvspherevolumemigrations
+    singular: cnsvspherevolumemigration
+  conditions:
+  - lastTransitionTime: "2024-12-16T02:40:13Z"
+    message: no conflicts found
+    reason: NoConflicts
+    status: "True"
+    type: NamesAccepted
+  - lastTransitionTime: "2024-12-16T02:40:13Z"
+    message: the initial names have been accepted
+    reason: InitialNamesAccepted
+    status: "True"
+    type: Established
+  storedVersions:
+  - v1alpha1

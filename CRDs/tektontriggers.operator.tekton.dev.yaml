@@ -1,0 +1,65 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    operatorframework.io/installed-alongside-6f060771fa1cc7a7: openshift-operators/openshift-pipelines-operator-rh.v1.17.0
+  creationTimestamp: "2024-12-30T09:23:31Z"
+  generation: 1
+  labels:
+    olm.managed: "true"
+    operator.tekton.dev/release: v0.74.0
+    operators.coreos.com/openshift-pipelines-operator-rh.openshift-operators: ""
+    version: 1.17.0
+  name: tektontriggers.operator.tekton.dev
+  resourceVersion: "8117792"
+  uid: 1c255d50-fa04-4f19-817a-bd7279738b3c
+spec:
+  conversion:
+    strategy: None
+  group: operator.tekton.dev
+  names:
+    kind: TektonTrigger
+    listKind: TektonTriggerList
+    plural: tektontriggers
+    singular: tektontrigger
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.version
+      name: Version
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].message
+      name: Reason
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Schema for the tektontriggers API
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: TektonTrigger
+    listKind: TektonTriggerList
+    plural: tektontriggers
+    singular: tektontrigger
+  conditions:
+  - lastTransitionTime: "2024-12-30T09:23:31Z"
+    message: no conflicts found
+    reason: NoConflicts
+    status: "True"
+    type: NamesAccepted
+  - lastTransitionTime: "2024-12-30T09:23:31Z"
+    message: the initial names have been accepted
+    reason: InitialNamesAccepted
+    status: "True"
+    type: Established
+  storedVersions:
+  - v1alpha1
