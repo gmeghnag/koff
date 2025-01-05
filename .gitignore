@@ -2,3 +2,4 @@
 /site
 TEST
 *.db
+**/_build

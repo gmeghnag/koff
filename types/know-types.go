@@ -19,6 +19,9 @@ import (
 	rbac "k8s.io/kubernetes/pkg/apis/rbac"
 	"k8s.io/kubernetes/pkg/apis/resource"
 	"k8s.io/kubernetes/pkg/apis/scheduling"
+	networkingv1_28 "k8s.io/kubernetes/v1_28/pkg/apis/networking"
+	policyv1_28 "k8s.io/kubernetes/v1_28/pkg/apis/policy"
+	resourcev1_30 "k8s.io/kubernetes/v1_30/pkg/apis/resource"
 
 	templateapi "github.com/openshift/openshift-apiserver/pkg/template/apis/template"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -215,7 +218,7 @@ func addAppsTypes(scheme *runtime.Scheme) error {
 func addNetworkingTypes(scheme *runtime.Scheme) error {
 	GroupVersion := schema.GroupVersion{Group: "networking.k8s.io", Version: "v1"}
 	types := []runtime.Object{
-		&networking.ClusterCIDR{},
+		&networkingv1_28.ClusterCIDR{},
 		&networking.IngressClass{},
 		&networking.Ingress{},
 		&networking.NetworkPolicy{},
@@ -236,7 +239,7 @@ func addPolicyV1Types(scheme *runtime.Scheme) error {
 func addPolicyV1B1Types(scheme *runtime.Scheme) error {
 	GroupVersion := schema.GroupVersion{Group: "policy", Version: "v1"}
 	types := []runtime.Object{
-		&policy.PodSecurityPolicy{},
+		&policyv1_28.PodSecurityPolicy{},
 	}
 	scheme.AddKnownTypes(GroupVersion, types...)
 	return nil
@@ -304,7 +307,7 @@ func addStorageV1B1Types(scheme *runtime.Scheme) error {
 func addResourceV1A2Types(scheme *runtime.Scheme) error {
 	GroupVersion := schema.GroupVersion{Group: "resource", Version: "v1alpha2"}
 	types := []runtime.Object{
-		&resource.ResourceClass{},
+		&resourcev1_30.ResourceClass{},
 		&resource.ResourceClaim{},
 		&resource.ResourceClaimTemplate{},
 	}
