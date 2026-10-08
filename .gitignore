@@ -2,3 +2,12 @@
 /site
 TEST
 *.db
+
+# Local test fixtures (large etcd snapshots, etc.)
+/testdata/
+
+# OS / editor cruft
+.DS_Store
+
+# Go test binaries
+*.test
