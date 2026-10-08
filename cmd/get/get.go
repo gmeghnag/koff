@@ -1,12 +1,12 @@
 package get
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"sort"
 	"strings"
 
 	"github.com/gmeghnag/koff/pkg/deserializer"
@@ -15,7 +15,7 @@ import (
 	"github.com/gmeghnag/koff/types"
 	"github.com/spf13/cobra"
 	bolt "go.etcd.io/bbolt"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	cliprint "k8s.io/cli-runtime/pkg/printers"
@@ -33,7 +33,12 @@ var GetCmd = &cobra.Command{
 		}
 		koffConfigJson := types.Config{}
 		var dataIn []byte
-		if !terminal.IsTerminal(int(os.Stdin.Fd())) {
+		// TODO: the pipe-vs-config decision relies on stdin being a TTY. In
+		// non-interactive, non-TTY contexts (scripts, CI, cron) with no piped
+		// data this blocks on io.ReadAll or ignores the configured snapshot.
+		// Consider an explicit flag (e.g. --filename/-f) or detecting an empty,
+		// non-pipe stdin instead of term.IsTerminal alone.
+		if !term.IsTerminal(int(os.Stdin.Fd())) {
 			infile := os.Stdin
 			dataIn, _ = io.ReadAll(infile)
 			Koff.FromInput = true
@@ -54,79 +59,18 @@ var GetCmd = &cobra.Command{
 				return err
 			}
 			defer Koff.EtcdDb.Close()
-			populateCRDsFromEtcd(Koff, koffConfigJson.InUse.Path, args[0])
-			err = helpers.ParseGetArgs(Koff, args)
-			//fmt.Println(Koff.EtcdAliasToCrdKubeKey)
-			if err != nil {
+			if err := GetFromEtcd(Koff, args); err != nil {
 				klog.V(1).ErrorS(err, "ERROR")
 				return err
-			}
-			EtcdKeyPrefixesToCheck := make(map[string]bool)
-			for resourType := range Koff.GetArgs {
-				if len(Koff.GetArgs[resourType]) == 0 {
-					x, err := helpers.EtcdPrefixFromAlias(Koff, resourType, "")
-					if err != nil {
-						return err
-					}
-					EtcdKeyPrefixesToCheck[x] = false
-				} else {
-					for resourName := range Koff.GetArgs[resourType] {
-						x, err := helpers.EtcdPrefixFromAlias(Koff, resourType, resourName)
-						if err != nil {
-							return err
-						}
-						EtcdKeyPrefixesToCheck[x] = false
-					}
-				}
-				//GetResourcesFor(Koff, resourType)
-			}
-			GetResourcesFromEtcd(Koff, EtcdKeyPrefixesToCheck)
-			sort.Strings(Koff.EtcdKubeKeysToGet)
-			for i, kubeKey := range Koff.EtcdKubeKeysToGet {
-				//fmt.Println(Koff.EtcdKubeKeysToGet[i-1], kubeKey)
-				// remove duplicated kubeKey (I don't know why but some keys are duplicated)
-				if i == 0 || Koff.EtcdKubeKeysToGet[i-1] != kubeKey {
-					handleKubeKey(Koff, kubeKey)
-				}
 			}
 		}
-		if !Koff.FromInput && koffConfigJson.InUse.IsBundle {
-			// TODO GESTISCI QUANDO è UN BUNDLE KOFF
-			fmt.Println("bundle koff")
-			err := helpers.ParseGetArgs(Koff, args)
-			if err != nil {
+		// File or piped input (anything that is not an etcd snapshot).
+		if !koffConfigJson.InUse.IsEtcdDb {
+			if err := helpers.ParseGetArgs(Koff, args); err != nil {
 				klog.V(1).ErrorS(err, "ERROR")
 				return err
 			}
-			for resourceArg := range Koff.GetArgs {
-				resourceType, resourceGroup, err := helpers.RetrieveKindGroup(Koff, resourceArg)
-				if err != nil {
-					klog.V(1).ErrorS(err, "ERROR")
-					return err
-				}
-				fmt.Println("+++", resourceType, resourceGroup)
-			}
-			//resourceType, resourceGroup, err := helpers.RetrieveKindGroup()
-		} else if !Koff.FromInput && !koffConfigJson.InUse.IsBundle && !koffConfigJson.InUse.IsEtcdDb {
-			err := helpers.ParseGetArgs(Koff, args)
-			if err != nil {
-				klog.V(1).ErrorS(err, "ERROR")
-				return err
-			}
-			Koff.IsBundle = false
-			err = HandleDataIn(dataIn, Koff)
-			if err != nil {
-				klog.V(1).ErrorS(err, "ERROR")
-				return err
-			}
-		} else if !koffConfigJson.InUse.IsBundle && !koffConfigJson.InUse.IsEtcdDb {
-			err := helpers.ParseGetArgs(Koff, args)
-			if err != nil {
-				klog.V(1).ErrorS(err, "ERROR")
-				return err
-			}
-			err = HandleDataIn(dataIn, Koff)
-			if err != nil {
+			if err := HandleDataIn(dataIn, Koff); err != nil {
 				klog.V(1).ErrorS(err, "ERROR")
 				return err
 			}
@@ -142,11 +86,19 @@ var GetCmd = &cobra.Command{
 }
 
 func HandleDataIn(dataIn []byte, Koff *types.KoffCommand) error {
+	if len(bytes.TrimSpace(dataIn)) == 0 {
+		// No input (empty file / empty pipe): nothing to render.
+		return nil
+	}
 	unstructuredObject := &unstructured.Unstructured{}
 	err := yaml.Unmarshal(dataIn, &unstructuredObject)
 	if err != nil {
 		klog.V(1).ErrorS(err, "ERROR")
 		return err
+	}
+	if unstructuredObject == nil || unstructuredObject.Object == nil {
+		// Input decoded to null/empty document.
+		return nil
 	}
 	if unstructuredObject.IsList() {
 		unstructuredList := &unstructured.UnstructuredList{}
@@ -172,25 +124,7 @@ func HandleDataIn(dataIn []byte, Koff *types.KoffCommand) error {
 }
 
 func HandleObject(Koff *types.KoffCommand, obj unstructured.Unstructured) error {
-	Koff.ArgPresent[strings.ToLower(obj.GetKind())] = true
-	if (Koff.FromInput || !Koff.IsBundle) && len(Koff.GetArgs) > 0 {
-		resourcesNames, resourceTypePresent := Koff.GetArgs[strings.ToLower(obj.GetKind())]
-		if !resourceTypePresent {
-			_, resourceTypeWithGroupPresent := Koff.GetArgs[strings.ToLower(obj.GetKind()+"."+strings.Split(obj.GetAPIVersion(), "/")[0])]
-			if !resourceTypeWithGroupPresent && !resourceTypePresent {
-				return nil
-			}
-		}
-		_, resourceNamePresent := Koff.GetArgs[strings.ToLower(obj.GetKind())][obj.GetName()]
-		if !resourceNamePresent {
-			extendedResourceKind := obj.GetKind() + "." + strings.Split(obj.GetAPIVersion(), "/")[0]
-			_, extendedResourceNamePresent := Koff.GetArgs[strings.ToLower(extendedResourceKind)][obj.GetName()]
-			if (!resourceNamePresent && !extendedResourceNamePresent) && len(resourcesNames) > 0 {
-				return nil
-			}
-		}
-	}
-	if Koff.Namespace != "" && obj.GetNamespace() != "" && Koff.Namespace != obj.GetNamespace() {
+	if !passesFilters(Koff, obj) {
 		return nil
 	}
 	Koff.LastKind = obj.GetKind()
@@ -202,56 +136,111 @@ func HandleObject(Koff *types.KoffCommand, obj unstructured.Unstructured) error 
 		return nil
 	}
 	if Koff.OutputFormat == "name" {
-		if obj.GetAPIVersion() == "v1" {
-			Koff.Output.WriteString(strings.ToLower(obj.GetKind()) + "/" + obj.GetName() + "\n")
-		} else {
-			Koff.Output.WriteString(strings.ToLower(obj.GetKind()) + "." + strings.Split(obj.GetAPIVersion(), "/")[0] + "/" + obj.GetName() + "\n")
-		}
+		Koff.Output.WriteString(nameOutput(obj))
 		return nil
 	}
+	objectTable, err := buildObjectTable(Koff, obj)
+	if err != nil {
+		return err
+	}
+	return mergeObjectTable(Koff, obj, objectTable)
+}
+
+// passesFilters records that the kind was seen and reports whether obj should be
+// rendered given the requested resource names and namespace. It mutates Koff
+// (ArgPresent) and must be called serially.
+func passesFilters(Koff *types.KoffCommand, obj unstructured.Unstructured) bool {
+	Koff.ArgPresent[strings.ToLower(obj.GetKind())] = true
+	if len(Koff.GetArgs) > 0 {
+		resourcesNames, resourceTypePresent := Koff.GetArgs[strings.ToLower(obj.GetKind())]
+		if !resourceTypePresent {
+			_, resourceTypeWithGroupPresent := Koff.GetArgs[strings.ToLower(obj.GetKind()+"."+strings.Split(obj.GetAPIVersion(), "/")[0])]
+			if !resourceTypeWithGroupPresent && !resourceTypePresent {
+				return false
+			}
+		}
+		_, resourceNamePresent := Koff.GetArgs[strings.ToLower(obj.GetKind())][obj.GetName()]
+		if !resourceNamePresent {
+			extendedResourceKind := obj.GetKind() + "." + strings.Split(obj.GetAPIVersion(), "/")[0]
+			_, extendedResourceNamePresent := Koff.GetArgs[strings.ToLower(extendedResourceKind)][obj.GetName()]
+			if (!resourceNamePresent && !extendedResourceNamePresent) && len(resourcesNames) > 0 {
+				return false
+			}
+		}
+	}
+	if Koff.Namespace != "" && obj.GetNamespace() != "" && Koff.Namespace != obj.GetNamespace() {
+		return false
+	}
+	return true
+}
+
+func nameOutput(obj unstructured.Unstructured) string {
+	if obj.GetAPIVersion() == "v1" {
+		return strings.ToLower(obj.GetKind()) + "/" + obj.GetName() + "\n"
+	}
+	return strings.ToLower(obj.GetKind()) + "." + strings.Split(obj.GetAPIVersion(), "/")[0] + "/" + obj.GetName() + "\n"
+}
+
+// buildObjectTable renders a single object's table. For custom resources it uses
+// the stateful (serial) CRD resolution. Use buildObjectTableReadOnly for
+// concurrent rendering.
+func buildObjectTable(Koff *types.KoffCommand, obj unstructured.Unstructured) (*metav1.Table, error) {
+	if _, known := Koff.KnownResources[strings.ToLower(obj.GetKind())]; known {
+		return knownResourceTable(Koff, obj)
+	}
+	return tablegenerator.GenerateCustomResourceTable(Koff, obj)
+}
+
+// buildObjectTableReadOnly is a concurrency-safe equivalent of buildObjectTable:
+// it never mutates Koff, resolving custom-resource CRDs read-only (etcd preloads
+// them). Safe to call from multiple goroutines.
+func buildObjectTableReadOnly(Koff *types.KoffCommand, obj unstructured.Unstructured) (*metav1.Table, error) {
+	if _, known := Koff.KnownResources[strings.ToLower(obj.GetKind())]; known {
+		return knownResourceTable(Koff, obj)
+	}
+	crd := tablegenerator.ResolveCRDReadOnly(Koff, obj)
+	return tablegenerator.BuildCustomResourceTable(Koff, obj, crd)
+}
+
+// knownResourceTable builds the table for a built-in resource. It only reads
+// Koff (Schema, config, TableGenerator) and is safe for concurrent use.
+func knownResourceTable(Koff *types.KoffCommand, obj unstructured.Unstructured) (*metav1.Table, error) {
 	rawObject, err := yaml.Marshal(obj.Object)
 	if err != nil {
 		klog.V(1).ErrorS(err, err.Error())
-		return err
+		return nil, err
 	}
-	klog.V(3).Info("INFO deserializing ", obj.GetKind(), " ", obj.GetName())
-	var objectTable *metav1.Table
-	_, ok := Koff.KnownResources[strings.ToLower(obj.GetKind())]
-	if ok {
-		runtimeObjectType := deserializer.RawObjectToRuntimeObject(rawObject, Koff.Schema)
-		if err := yaml.Unmarshal([]byte(rawObject), runtimeObjectType); err != nil {
-			klog.V(3).Info(err, err.Error())
-		}
-		objectTable, err = tablegenerator.InternalResourceTable(Koff, runtimeObjectType, &obj)
-		if err != nil {
-			klog.V(3).Info("INFO ", fmt.Sprintf("%s: %s, %s", err.Error(), obj.GetKind(), obj.GetAPIVersion()))
-			klog.V(1).ErrorS(err, err.Error())
-			return err
-		}
-	} else {
-		objectTable, err = tablegenerator.GenerateCustomResourceTable(Koff, obj)
-		if err != nil {
-			klog.V(1).ErrorS(err, err.Error())
-			return err
-		}
+	runtimeObjectType := deserializer.RawObjectToRuntimeObject(rawObject, Koff.Schema)
+	if err := yaml.Unmarshal(rawObject, runtimeObjectType); err != nil {
+		klog.V(3).Info(err, err.Error())
 	}
+	table, err := tablegenerator.InternalResourceTable(Koff, runtimeObjectType, &obj)
+	if err != nil {
+		klog.V(3).Info("INFO ", fmt.Sprintf("%s: %s, %s", err.Error(), obj.GetKind(), obj.GetAPIVersion()))
+		klog.V(1).ErrorS(err, err.Error())
+		return nil, err
+	}
+	return table, nil
+}
 
+// mergeObjectTable appends an object's rendered rows to the running table,
+// flushing the previous kind's table when the kind changes. It mutates Koff and
+// must be called serially in output order.
+func mergeObjectTable(Koff *types.KoffCommand, obj unstructured.Unstructured, objectTable *metav1.Table) error {
 	if Koff.CurrentKind == obj.GetObjectKind().GroupVersionKind().Kind {
 		Koff.Table.Rows = append(Koff.Table.Rows, objectTable.Rows...)
-	} else {
-		// printo la tabella dell'oggetto precedente
-		printer := cliprint.NewTablePrinter(cliprint.PrintOptions{NoHeaders: Koff.NoHeaders, Wide: Koff.Wide, WithNamespace: false, ShowLabels: false})
-		err = printer.PrintObj(&Koff.Table, &Koff.Output)
-		if err != nil {
-			klog.V(1).ErrorS(err, err.Error())
-			return err
-		}
-		if Koff.CurrentKind != "" {
-			Koff.Output.WriteByte('\n')
-		}
-		Koff.CurrentKind = obj.GetObjectKind().GroupVersionKind().Kind
-		Koff.Table = metav1.Table{ColumnDefinitions: objectTable.ColumnDefinitions, Rows: objectTable.Rows}
+		return nil
 	}
+	printer := cliprint.NewTablePrinter(cliprint.PrintOptions{NoHeaders: Koff.NoHeaders, Wide: Koff.Wide})
+	if err := printer.PrintObj(&Koff.Table, &Koff.Output); err != nil {
+		klog.V(1).ErrorS(err, err.Error())
+		return err
+	}
+	if Koff.CurrentKind != "" {
+		Koff.Output.WriteByte('\n')
+	}
+	Koff.CurrentKind = obj.GetObjectKind().GroupVersionKind().Kind
+	Koff.Table = metav1.Table{ColumnDefinitions: objectTable.ColumnDefinitions, Rows: objectTable.Rows}
 	return nil
 }
 
@@ -259,77 +248,71 @@ func init() {
 	GetCmd.Flags().BoolVarP(&Koff.ShowKind, "show-kind", "K", Koff.ShowKind, "Show kind.")
 	GetCmd.Flags().BoolVar(&Koff.ShowManagedFields, "show-managed-fields", Koff.ShowManagedFields, "Show managedFields when output is one of: json, yaml.")
 	GetCmd.Flags().BoolVarP(&Koff.ShowNamespace, "show-namespace", "N", Koff.ShowNamespace, "Show namespace.")
-	GetCmd.Flags().BoolVarP(&Koff.AllNamespaces, "all-namespaces", "A", Koff.ShowNamespace, "Show resources across all namespaces.")
+	GetCmd.Flags().BoolVarP(&Koff.AllNamespaces, "all-namespaces", "A", Koff.AllNamespaces, "Show resources across all namespaces.")
 	GetCmd.Flags().BoolVar(&Koff.NoHeaders, "no-headers", Koff.NoHeaders, "Hide headers.")
 	GetCmd.Flags().StringVarP(&Koff.OutputFormat, "output", "o", "", "Output format. One of: json|yaml|wide")
 	GetCmd.Flags().StringVarP(&Koff.Namespace, "namespace", "n", "", "Namespace.")
 }
 
-func KoffToStdOut(*types.KoffCommand) error {
-	//fmt.Println("Koff.GetArgs", Koff.GetArgs)
-	//fmt.Println("Koff.ArgPresent", Koff.ArgPresent)
-	if len(Koff.GetArgs) > 0 {
-		for resource := range Koff.ArgPresent {
-			exist, _ := Koff.ArgPresent[resource]
-			if !exist {
+// KoffToStdOut renders the accumulated results to os.Stdout.
+func KoffToStdOut(koff *types.KoffCommand) error {
+	return KoffToWriter(koff, os.Stdout)
+}
+
+// KoffToWriter renders the accumulated results to out. It honours the selected
+// output format (json/yaml/table) and reports an error if a requested resource
+// type was never seen.
+func KoffToWriter(koff *types.KoffCommand, out io.Writer) error {
+	if len(koff.GetArgs) > 0 {
+		for resource, present := range koff.ArgPresent {
+			if !present {
 				return fmt.Errorf("resource type or alias \"%s\" not known", resource)
 			}
 		}
 	}
-	printer := cliprint.NewTablePrinter(cliprint.PrintOptions{NoHeaders: Koff.NoHeaders, Wide: Koff.Wide, WithNamespace: false, ShowLabels: false})
-	if Koff.OutputFormat == "json" {
-		if Koff.SingleResource && len(Koff.UnstructuredList.Items) == 1 {
-			data, _ := json.MarshalIndent(Koff.UnstructuredList.Items[0].Object, "", "  ")
-			data = append(data, '\n')
-			fmt.Printf("%s", data)
-			return nil
-		} else if !Koff.SingleResource && len(Koff.UnstructuredList.Items) > 0 {
-			data, _ := json.MarshalIndent(Koff.UnstructuredList, "", "  ")
-			data = append(data, '\n')
-			fmt.Printf("%s", data)
-			return nil
+	noResources := func() {
+		if koff.Namespace != "" {
+			fmt.Fprintf(out, "No resources found in %s namespace.\n", koff.Namespace)
 		} else {
-			if Koff.Namespace != "" {
-				fmt.Printf("No resources found in %s namespace.\n", Koff.Namespace)
-			} else {
-				fmt.Println("No resources found.")
-			}
-			return nil
+			fmt.Fprintln(out, "No resources found.")
 		}
-	} else if Koff.OutputFormat == "yaml" {
-		if Koff.SingleResource && len(Koff.UnstructuredList.Items) == 1 {
-			data, _ := yaml.Marshal(Koff.UnstructuredList.Items[0].Object)
-			fmt.Printf("%s", data)
-			return nil
-		} else if len(Koff.UnstructuredList.Items) > 0 {
-			data, _ := yaml.Marshal(Koff.UnstructuredList)
-			fmt.Printf("%s", data)
-			return nil
+	}
+	switch koff.OutputFormat {
+	case "json":
+		if koff.SingleResource && len(koff.UnstructuredList.Items) == 1 {
+			data, _ := json.MarshalIndent(koff.UnstructuredList.Items[0].Object, "", "  ")
+			fmt.Fprintf(out, "%s\n", data)
+		} else if !koff.SingleResource && len(koff.UnstructuredList.Items) > 0 {
+			data, _ := json.MarshalIndent(koff.UnstructuredList, "", "  ")
+			fmt.Fprintf(out, "%s\n", data)
 		} else {
-			if Koff.Namespace != "" {
-				fmt.Printf("No resources found in %s namespace.\n", Koff.Namespace)
-			} else {
-				fmt.Println("No resources found.")
-			}
-			return nil
+			noResources()
 		}
-	} else {
-		if Koff.LastKind == Koff.CurrentKind {
-			err := printer.PrintObj(&Koff.Table, &Koff.Output)
-			if err != nil {
+		return nil
+	case "yaml":
+		if koff.SingleResource && len(koff.UnstructuredList.Items) == 1 {
+			data, _ := yaml.Marshal(koff.UnstructuredList.Items[0].Object)
+			fmt.Fprintf(out, "%s", data)
+		} else if len(koff.UnstructuredList.Items) > 0 {
+			data, _ := yaml.Marshal(koff.UnstructuredList)
+			fmt.Fprintf(out, "%s", data)
+		} else {
+			noResources()
+		}
+		return nil
+	default:
+		if koff.LastKind == koff.CurrentKind {
+			printer := cliprint.NewTablePrinter(cliprint.PrintOptions{NoHeaders: koff.NoHeaders, Wide: koff.Wide})
+			if err := printer.PrintObj(&koff.Table, &koff.Output); err != nil {
 				klog.V(1).ErrorS(err, "ERROR")
 				return err
 			}
-			Koff.Table = metav1.Table{}
+			koff.Table = metav1.Table{}
 		}
-		if Koff.Output.Len() == 0 {
-			if Koff.Namespace != "" {
-				fmt.Printf("No resources found in %s namespace.\n", Koff.Namespace)
-			} else {
-				fmt.Println("No resources found.")
-			}
+		if koff.Output.Len() == 0 {
+			noResources()
 		} else {
-			Koff.Output.WriteTo(os.Stdout)
+			koff.Output.WriteTo(out)
 		}
 		return nil
 	}

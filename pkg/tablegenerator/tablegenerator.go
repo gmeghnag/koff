@@ -26,6 +26,12 @@ func InternalResourceTable(Koff *types.KoffCommand, runtimeObject runtime.Object
 	if err != nil {
 		return table, err
 	}
+	// Defensive guard: every mutation below assumes at least one row and one
+	// column. Some handlers can legitimately emit an empty table; bail out
+	// early instead of panicking with an index-out-of-range.
+	if len(table.Rows) == 0 || len(table.ColumnDefinitions) == 0 {
+		return table, err
+	}
 	for i, column := range table.ColumnDefinitions {
 		if column.Name == "Age" {
 			table.Rows[0].Cells[i] = helpers.TranslateTimestamp(unstruct.GetCreationTimestamp())
@@ -61,35 +67,70 @@ func InternalResourceTable(Koff *types.KoffCommand, runtimeObject runtime.Object
 
 	if (Koff.ShowNamespace || Koff.AllNamespaces) && unstruct.GetNamespace() != "" {
 		table.ColumnDefinitions = append([]metav1.TableColumnDefinition{{Format: "string", Name: "Namespace"}}, table.ColumnDefinitions...)
-		table.Rows[0].Cells = append([]interface{}{unstruct.GetNamespace()}, table.Rows[0].Cells...)
+		table.Rows[0].Cells = append([]any{unstruct.GetNamespace()}, table.Rows[0].Cells...)
 	}
 	return table, err
 }
 
+// GenerateCustomResourceTable renders a custom resource, resolving its CRD
+// (caching it in Koff.CRD for runs of the same kind). It is used by the serial
+// path; the parallel path uses ResolveCRDReadOnly + BuildCustomResourceTable.
 func GenerateCustomResourceTable(Koff *types.KoffCommand, unstruct unstructured.Unstructured) (*metav1.Table, error) {
+	// Resolve the CRD only when the object kind differs from the previous one.
+	if Koff.CurrentKind != unstruct.GetKind() {
+		Koff.CRD = resolveCRD(Koff, unstruct)
+	}
+	return BuildCustomResourceTable(Koff, unstruct, Koff.CRD)
+}
+
+// resolveCRD finds the CRD for a custom resource, consulting the in-memory
+// caches and, for file mode, scanning ~/.koff once. It mutates Koff caches and
+// must be called serially.
+func resolveCRD(Koff *types.KoffCommand, unstruct unstructured.Unstructured) *apiextensionsv1.CustomResourceDefinition {
+	resourceKind := strings.ToLower(unstruct.GetKind())
+	if crd, ok := Koff.AliasToCrd[resourceKind]; ok {
+		return &apiextensionsv1.CustomResourceDefinition{Spec: crd.Spec}
+	}
+	if Koff.IsEtcdDb {
+		crd, err := GetCrdFromCr(Koff, resourceKind+"."+unstruct.GetObjectKind().GroupVersionKind().Group)
+		if err != nil {
+			return nil
+		}
+		return crd
+	}
+	helpers.RetrieveKindGroupFromCRDS(Koff, resourceKind)
+	if crd, ok := Koff.AliasToCrd[resourceKind]; ok {
+		return &apiextensionsv1.CustomResourceDefinition{Spec: crd.Spec}
+	}
+	return nil
+}
+
+// ResolveCRDReadOnly resolves a CRD without mutating Koff, so it is safe for
+// concurrent use. It consults the already-loaded alias caches (etcd preloads
+// them before rendering) and, for etcd, reads the CRD via a read-only
+// transaction; it never triggers a ~/.koff disk scan.
+func ResolveCRDReadOnly(Koff *types.KoffCommand, unstruct unstructured.Unstructured) *apiextensionsv1.CustomResourceDefinition {
+	resourceKind := strings.ToLower(unstruct.GetKind())
+	if crd, ok := Koff.AliasToCrd[resourceKind]; ok {
+		return &apiextensionsv1.CustomResourceDefinition{Spec: crd.Spec}
+	}
+	if Koff.IsEtcdDb {
+		crd, err := GetCrdFromCr(Koff, resourceKind+"."+unstruct.GetObjectKind().GroupVersionKind().Group)
+		if err != nil {
+			return nil
+		}
+		return crd
+	}
+	return nil
+}
+
+// BuildCustomResourceTable builds the table for a custom resource given its
+// (possibly nil) CRD. It only reads Koff configuration and is safe for
+// concurrent use.
+func BuildCustomResourceTable(Koff *types.KoffCommand, unstruct unstructured.Unstructured, crd *apiextensionsv1.CustomResourceDefinition) (*metav1.Table, error) {
 	resourceKind := strings.ToLower(unstruct.GetKind())
 	table := &metav1.Table{}
-	// search for its corresponding CRD obly if this object Kind differs from the previous one parsed
-	if Koff.CurrentKind != unstruct.GetKind() {
-		Koff.CRD = nil
-		crd, ok := Koff.AliasToCrd[resourceKind]
-		if ok {
-			_crd := &apiextensionsv1.CustomResourceDefinition{Spec: crd.Spec}
-			Koff.CRD = _crd
-		} else {
-			if Koff.IsEtcdDb {
-				Koff.CRD, _ = GetCrdFromCr(Koff, strings.ToLower(unstruct.GetKind())+"."+unstruct.GetObjectKind().GroupVersionKind().Group)
-			} else {
-				helpers.RetrieveKindGroupFromCRDS(Koff, resourceKind)
-				crd, ok := Koff.AliasToCrd[resourceKind]
-				if ok {
-					_crd := &apiextensionsv1.CustomResourceDefinition{Spec: crd.Spec}
-					Koff.CRD = _crd
-				}
-			}
-		}
-	}
-	if Koff.CRD == nil {
+	if crd == nil {
 		//fmt.Println("CustomResourceDefinition not found for kind \"" + unstruct.GetKind() + "\", apiVersion: \"" + unstruct.GetAPIVersion() + "\"")
 		//return table, fmt.Errorf("CustomResourceDefinition not found for kind \"" + unstruct.GetKind() + "\", apiVersion: \"" + unstruct.GetAPIVersion() + "\"")
 		if (Koff.ShowNamespace || Koff.AllNamespaces) && unstruct.GetNamespace() != "" {
@@ -99,9 +140,9 @@ func GenerateCustomResourceTable(Koff *types.KoffCommand, unstruct unstructured.
 				{Name: "Created At", Type: "date"},
 			}
 			if Koff.ShowKind || Koff.Namespace == "" || len(Koff.GetArgs) != 1 {
-				table.Rows = []metav1.TableRow{{Cells: []interface{}{unstruct.GetNamespace(), resourceKind + "." + unstruct.GetObjectKind().GroupVersionKind().Group + "/" + unstruct.GetName(), unstruct.GetCreationTimestamp().Time.UTC().Format("2006-01-02T15:04:05")}}}
+				table.Rows = []metav1.TableRow{{Cells: []any{unstruct.GetNamespace(), resourceKind + "." + unstruct.GetObjectKind().GroupVersionKind().Group + "/" + unstruct.GetName(), unstruct.GetCreationTimestamp().Time.UTC().Format("2006-01-02T15:04:05")}}}
 			} else {
-				table.Rows = []metav1.TableRow{{Cells: []interface{}{unstruct.GetNamespace(), unstruct.GetName(), unstruct.GetCreationTimestamp().Time.UTC().Format("2006-01-02T15:04:05")}}}
+				table.Rows = []metav1.TableRow{{Cells: []any{unstruct.GetNamespace(), unstruct.GetName(), unstruct.GetCreationTimestamp().Time.UTC().Format("2006-01-02T15:04:05")}}}
 			}
 
 		} else {
@@ -110,37 +151,37 @@ func GenerateCustomResourceTable(Koff *types.KoffCommand, unstruct unstructured.
 				{Name: "Created At", Type: "date"},
 			}
 			if Koff.ShowKind || Koff.Namespace == "" || len(Koff.GetArgs) != 1 {
-				table.Rows = []metav1.TableRow{{Cells: []interface{}{resourceKind + "." + unstruct.GetObjectKind().GroupVersionKind().Group + "/" + unstruct.GetName(), unstruct.GetCreationTimestamp().Time.UTC().Format("2006-01-02T15:04:05")}}}
+				table.Rows = []metav1.TableRow{{Cells: []any{resourceKind + "." + unstruct.GetObjectKind().GroupVersionKind().Group + "/" + unstruct.GetName(), unstruct.GetCreationTimestamp().Time.UTC().Format("2006-01-02T15:04:05")}}}
 
 			} else {
-				table.Rows = []metav1.TableRow{{Cells: []interface{}{unstruct.GetName(), unstruct.GetCreationTimestamp().Time.UTC().Format("2006-01-02T15:04:05")}}}
+				table.Rows = []metav1.TableRow{{Cells: []any{unstruct.GetName(), unstruct.GetCreationTimestamp().Time.UTC().Format("2006-01-02T15:04:05")}}}
 			}
 
 		}
 		return table, nil
 	}
 
-	cells := []interface{}{}
+	cells := []any{}
 	// table.ColumnDefinitions = []metav1.TableColumnDefinition{{Name: "Name", Format: "name"}}
 	if Koff.ShowKind || Koff.Namespace == "" || len(Koff.GetArgs) != 1 {
 		if (Koff.ShowNamespace || Koff.AllNamespaces) && unstruct.GetNamespace() != "" {
 			table.ColumnDefinitions = []metav1.TableColumnDefinition{{Name: "Namespace", Format: "string"}, {Name: "Name", Format: "name"}}
-			cells = []interface{}{unstruct.GetNamespace(), resourceKind + "." + unstruct.GetObjectKind().GroupVersionKind().Group + "/" + unstruct.GetName()}
+			cells = []any{unstruct.GetNamespace(), resourceKind + "." + unstruct.GetObjectKind().GroupVersionKind().Group + "/" + unstruct.GetName()}
 		} else {
 			table.ColumnDefinitions = []metav1.TableColumnDefinition{{Name: "Name", Format: "name"}}
-			cells = []interface{}{resourceKind + "." + unstruct.GetObjectKind().GroupVersionKind().Group + "/" + unstruct.GetName()}
+			cells = []any{resourceKind + "." + unstruct.GetObjectKind().GroupVersionKind().Group + "/" + unstruct.GetName()}
 		}
 	} else {
 		if (Koff.ShowNamespace || Koff.AllNamespaces) && unstruct.GetNamespace() != "" {
 			table.ColumnDefinitions = []metav1.TableColumnDefinition{{Name: "Namespace", Format: "string"}, {Name: "Name", Format: "name"}}
-			cells = []interface{}{unstruct.GetNamespace(), unstruct.GetName()}
+			cells = []any{unstruct.GetNamespace(), unstruct.GetName()}
 		} else {
 			table.ColumnDefinitions = []metav1.TableColumnDefinition{{Name: "Name", Format: "name"}}
-			cells = []interface{}{unstruct.GetName()}
+			cells = []any{unstruct.GetName()}
 		}
 	}
-	if len(Koff.CRD.Spec.AdditionalPrinterColumns) > 0 {
-		for _, column := range Koff.CRD.Spec.AdditionalPrinterColumns {
+	if len(crd.Spec.AdditionalPrinterColumns) > 0 {
+		for _, column := range crd.Spec.AdditionalPrinterColumns {
 			table.ColumnDefinitions = append(table.ColumnDefinitions, metav1.TableColumnDefinition{Name: column.Name, Format: "string"})
 			if column.Name == "Age" {
 				cells = append(cells, helpers.TranslateTimestamp(unstruct.GetCreationTimestamp()))
@@ -157,10 +198,10 @@ func GenerateCustomResourceTable(Koff *types.KoffCommand, unstruct unstructured.
 			}
 		}
 	} else {
-		for i, column := range Koff.CRD.Spec.Versions {
-			if (Koff.CRD.Spec.Group + "/" + column.Name) == unstruct.GetAPIVersion() {
-				if len(Koff.CRD.Spec.Versions[i].AdditionalPrinterColumns) > 0 {
-					for _, column := range Koff.CRD.Spec.Versions[i].AdditionalPrinterColumns {
+		for i, column := range crd.Spec.Versions {
+			if (crd.Spec.Group + "/" + column.Name) == unstruct.GetAPIVersion() {
+				if len(crd.Spec.Versions[i].AdditionalPrinterColumns) > 0 {
+					for _, column := range crd.Spec.Versions[i].AdditionalPrinterColumns {
 						table.ColumnDefinitions = append(table.ColumnDefinitions, metav1.TableColumnDefinition{Name: column.Name, Format: "string"})
 						if column.Name == "Age" {
 							cells = append(cells, helpers.TranslateTimestamp(unstruct.GetCreationTimestamp()))
@@ -192,20 +233,23 @@ func GenerateCustomResourceTable(Koff *types.KoffCommand, unstruct unstructured.
 func GetCrdFromCr(Koff *types.KoffCommand, cr string) (*apiextensionsv1.CustomResourceDefinition, error) {
 	crFields := Koff.EtcdAliasToCrdKubeKey[cr]
 	crKubeKey := "/kubernetes.io/apiextensions.k8s.io/customresourcedefinitions/" + crFields.Plural + "." + crFields.Group
-	var crd = &apiextensionsv1.CustomResourceDefinition{}
-	if err := Koff.EtcdDb.View(func(tx *bolt.Tx) error {
+	crd := &apiextensionsv1.CustomResourceDefinition{}
+	err := Koff.EtcdDb.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("key"))
-		etcdvalue := b.Get(Koff.KubeKeysToEtcdKeys[crKubeKey])
+		if b == nil {
+			return fmt.Errorf("bucket %q not found", "key")
+		}
+		etcdKey, ok := Koff.KubeKeysToEtcdKeys[crKubeKey]
+		if !ok {
+			return fmt.Errorf("CRD %q not found in snapshot", crKubeKey)
+		}
 		var kv mvccpb.KeyValue
-		if err := kv.Unmarshal(etcdvalue); err != nil {
-			panic(err)
+		if err := kv.Unmarshal(b.Get(etcdKey)); err != nil {
+			return fmt.Errorf("unmarshalling CRD value: %w", err)
 		}
-		err := yaml.Unmarshal([]byte(kv.Value), &crd)
-		if err != nil {
-			panic(err)
-		}
-		return fmt.Errorf("errorroor")
-	}); err != nil {
+		return yaml.Unmarshal(kv.Value, crd)
+	})
+	if err != nil {
 		return crd, err
 	}
 	return crd, nil

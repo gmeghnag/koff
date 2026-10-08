@@ -1,3 +1,4 @@
 package vars
 
-var KoffBundleRootPath, Namespace, Id, KoffTag, KoffHash string
+// KoffTag and KoffHash are injected at build time via -ldflags.
+var KoffTag, KoffHash string

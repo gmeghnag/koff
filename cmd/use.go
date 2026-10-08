@@ -20,89 +20,25 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
-	"github.com/gmeghnag/koff/pkg/helpers"
 	"github.com/gmeghnag/koff/types"
-	"github.com/gmeghnag/koff/vars"
 
 	"github.com/spf13/cobra"
 )
 
-var isKoffBundle, isEtcDb bool
-
-func useContext(path string, koffConfigFile string) {
-	//if path != "" {
-	//	if !filepath.IsAbs(path) {
-	//		fmt.Println("error: \"" + path + "\" is not an absolute path.")
-	//		os.Exit(1)
-	//	}
-	//}
-	// read json koffConfigFile
-
-	if strings.HasSuffix(path, ".db") {
-		isEtcDb = true
+func useContext(path string, koffConfigFile string) error {
+	config := types.Config{
+		InUse: types.InUse{Path: path, IsEtcdDb: strings.HasSuffix(path, ".db")},
 	}
-	isDir, _ := helpers.IsDirectory(path)
-	if isDir {
-		_path, err := findKoffBundleIn(path)
-		if err == nil {
-			isKoffBundle = true
-		}
-		l := strings.Split(_path, "/")
-		path = strings.Join(l[0:(len(l)-1)], "/")
-		path = strings.TrimSuffix(path, "/")
-	}
-
-	file, _ := os.ReadFile(koffConfigFile)
-	koffConfigJson := types.Config{}
-	_ = json.Unmarshal([]byte(file), &koffConfigJson)
-
-	config := types.Config{}
-	config.InUse = types.InUse{Path: path, Namespace: "", IsBundle: isKoffBundle, IsEtcdDb: isEtcDb}
-
-	file, _ = json.MarshalIndent(config, "", " ")
-	_ = os.WriteFile(koffConfigFile, file, 0644)
-
-}
-
-func findKoffBundleIn(path string) (string, error) {
-	numDirs := 0
-	dirName := ""
-	retPath := strings.TrimSuffix(path, "/")
-	var retErr error
-	timeStampFound := false
-	namespacesFolderFound := false
-	files, err := os.ReadDir(path)
+	data, err := json.MarshalIndent(config, "", " ")
 	if err != nil {
-		return "", err
+		return err
 	}
-	for _, file := range files {
-		if file.IsDir() {
-			dirName = file.Name()
-			numDirs = numDirs + 1
-			if file.Name() == "namespaces" {
-				namespacesFolderFound = true
-			}
-		}
-		if !file.IsDir() && file.Name() == "timestamp" {
-			timeStampFound = true
-		}
+	if err := os.MkdirAll(filepath.Dir(koffConfigFile), 0755); err != nil {
+		return err
 	}
-	if namespacesFolderFound {
-		return retPath + "/", retErr
-	}
-	if timeStampFound && (numDirs > 1 || numDirs == 0) {
-		return path, fmt.Errorf("expected one directory in path: \"%s\", found: %s", path, strconv.Itoa(numDirs))
-	}
-	if !timeStampFound && numDirs == 1 {
-		retPath, retErr = findKoffBundleIn(path + "/" + dirName)
-	}
-	if !timeStampFound && !namespacesFolderFound {
-		return path, fmt.Errorf("timestamp and namespace folder not found")
-	}
-	return retPath + "/", retErr
+	return os.WriteFile(koffConfigFile, data, 0644)
 }
 
 // useCmd represents the use command
@@ -110,37 +46,25 @@ var UseCmd = &cobra.Command{
 	Use:   "use",
 	Short: "Select the resource to inspect",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path := ""
-		if len(args) > 1 || len(args) == 0 {
-			return fmt.Errorf("expect one arguemnt, found: %v", len(args))
-
-		} else {
-			path = args[0]
-			if strings.HasSuffix(path, "/") {
-				path = strings.TrimRight(path, "/")
-			}
-			if strings.HasSuffix(path, "\\") {
-				path = strings.TrimRight(path, "\\")
-			}
-			path, _ = filepath.Abs(path)
-			fileInfo, err := os.Stat(path)
-			if err != nil {
-				if os.IsNotExist(err) {
-					return fmt.Errorf("file \"%s\" does not exist", path)
-				} else {
-					return fmt.Errorf("%s", err)
-				}
-			}
-			if !fileInfo.Mode().IsRegular() {
-				return fmt.Errorf("\"%s\" is not a regular file", path)
-			}
+		if len(args) != 1 {
+			return fmt.Errorf("expected exactly one argument, found: %v", len(args))
 		}
-		home, _ := os.UserHomeDir()
-		useContext(path, home+"/.koff/koff.json")
-		return nil
+		path := strings.TrimRight(args[0], "/\\")
+		path, _ = filepath.Abs(path)
+		fileInfo, err := os.Stat(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("file \"%s\" does not exist", path)
+			}
+			return err
+		}
+		if !fileInfo.Mode().IsRegular() {
+			return fmt.Errorf("\"%s\" is not a regular file", path)
+		}
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		return useContext(path, filepath.Join(home, ".koff", "koff.json"))
 	},
-}
-
-func init() {
-	UseCmd.Flags().StringVarP(&vars.Id, "id", "i", "", "Id string for the bundle to use. If two bundle has the same id the first one will be used.")
 }

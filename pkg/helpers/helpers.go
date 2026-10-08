@@ -1,50 +1,21 @@
 package helpers
 
-// specific labels https://github.com/seans3/kubernetes/blob/6108dac6708c026b172f3928e137c206437791da/pkg/printers/internalversion/printers_test.go#L1979
 import (
-
-	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"bytes"
 	"fmt"
-	"io/ioutil"
-	"math/rand"
 	"os"
-	"strconv"
+	"path/filepath"
 	"strings"
 	"time"
-	"unsafe"
-
-	//"k8s.io/kubernetes/pkg/apis/rbac"
-	//rbac "k8s.io/api/rbac/v1"
-
-	// "k8s.io/client-go/kubernetes/scheme"
-	//"k8s.io/apimachinery/pkg/api/meta"
-
-	//runtime "k8s.io/apimachinery/pkg/runtime"
-	//utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 
 	"github.com/gmeghnag/koff/types"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/jsonpath"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
-
-	//core "k8s.io/kubernetes/pkg/apis/core"
-	//ocpinternal "github.com/openshift/openshift-apiserver/pkg/apps/printers/internalversion"
-	// cliprint "k8s.io/cli-runtime/pkg/printers"
-	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
-	//
 )
 
-func GetAge(resourcefilePath string, resourceCreationTimeStamp metav1.Time) string {
-	ResourceFile, _ := os.Stat(resourcefilePath)
-	t2 := ResourceFile.ModTime()
-	diffTime := t2.Sub(resourceCreationTimeStamp.Time).String()
-	d, _ := time.ParseDuration(diffTime)
-	return FormatDiffTime(d)
-
-}
 func TranslateTimestamp(timestamp metav1.Time) string {
 	if timestamp.IsZero() {
 		return "<unknown>"
@@ -70,42 +41,7 @@ func ShortHumanDuration(d time.Duration) string {
 	return fmt.Sprintf("%dy", int(d.Hours()/24/365))
 }
 
-func FormatDiffTime(diff time.Duration) string {
-	if diff.Hours() > 48 {
-		if diff.Hours() > 200000 {
-			return "Unknown"
-		}
-		return strconv.Itoa(int(diff.Hours()/24)) + "d"
-	}
-	if diff.Hours() < 48 && diff.Hours() > 10 {
-		var h float64
-		h = diff.Minutes() / 60
-		return strconv.Itoa(int(h)) + "h"
-	}
-	if diff.Minutes() > 60 {
-		var hours float64
-		hours = diff.Minutes() / 60
-		remainMinutes := int(diff.Minutes()) % 60
-		if remainMinutes > 0 {
-			return strconv.Itoa(int(hours)) + "h" + strconv.Itoa(remainMinutes) + "m"
-		}
-		return strconv.Itoa(int(hours)) + "h"
-
-	}
-	if diff.Seconds() > 60 {
-		var minutes float64
-		minutes = diff.Seconds() / 60
-		remainSeconds := int(diff.Seconds()) % 60
-		if remainSeconds > 0 && diff.Minutes() < 4 {
-			return strconv.Itoa(int(minutes)) + "m" + strconv.Itoa(remainSeconds) + "s"
-		}
-		return strconv.Itoa(int(minutes)) + "m"
-
-	}
-	return strconv.Itoa(int(diff.Seconds())) + "s"
-}
-
-func GetFromJsonPath(data interface{}, jsonPathTemplate string) string {
+func GetFromJsonPath(data any, jsonPathTemplate string) string {
 	buf := new(bytes.Buffer)
 	jPath := jsonpath.New("out")
 	jPath.AllowMissingKeys(false)
@@ -119,16 +55,6 @@ func GetFromJsonPath(data interface{}, jsonPathTemplate string) string {
 	return buf.String()
 }
 
-func Exists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if err == nil {
-		return true, nil
-	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
-}
 func ParseGetArgs(Koff *types.KoffCommand, args []string) error {
 	var _args []string
 	for _, arg := range args {
@@ -194,7 +120,7 @@ func ParseGetArgs(Koff *types.KoffCommand, args []string) error {
 	} else if len(args) > 1 && !strings.Contains(args[0], "/") {
 		resourceType := args[0]
 		if strings.Contains(resourceType, ".") {
-			resourceType = strings.SplitN(resourceType, ".", 1)[0]
+			resourceType = strings.SplitN(resourceType, ".", 2)[0]
 		}
 		normalizedResourceAlias, err := normalizeResourceAlias(Koff, resourceType)
 		if err == nil {
@@ -237,41 +163,6 @@ func normalizeResourceAlias(koff *types.KoffCommand, alias string) (string, erro
 	return alias, fmt.Errorf("alias \"%s\" not identified as any known resource or custom resource", alias)
 }
 
-func RetrieveKindGroup(koff *types.KoffCommand, alias string) (string, string, error) {
-	//if strings.Contains(alias, ".") {
-	//	resourceKindAndGroup := strings.SplitN(alias, ".", 1)
-	//	return resourceKindAndGroup[0], resourceKindAndGroup[1], nil
-	//}
-
-	value, ok := koff.KnownResources[alias]
-	if ok {
-		klog.V(3).Info("INFO ", fmt.Sprintf("found alias \"%s\" in known-resources.yaml", alias))
-		resourceName := value["name"].(string)
-		resourceGroup := value["group"].(string)
-		return resourceName, resourceGroup, nil
-	}
-	klog.V(3).Info("INFO ", fmt.Sprintf("No internal resource found with name or alias \"%s\"", alias))
-	return alias, "", fmt.Errorf("no internal resource found with name or alias \"%s\"", alias)
-}
-
-func RetrieveKindPluralGroupNamespaced(koff *types.KoffCommand, alias string) (string, string, bool, error) {
-	//if strings.Contains(alias, ".") {
-	//	resourceKindAndGroup := strings.SplitN(alias, ".", 1)
-	//	return resourceKindAndGroup[0], resourceKindAndGroup[1], nil
-	//}
-
-	value, ok := koff.KnownResources[alias]
-	if ok {
-		klog.V(3).Info("INFO ", fmt.Sprintf("found alias \"%s\" in known-resources.yaml", alias))
-		resourceName := value["plural"].(string)
-		resourceGroup := value["group"].(string)
-		resourceNamespaced := value["namespaced"].(bool)
-		return resourceName, resourceGroup, resourceNamespaced, nil
-	}
-	klog.V(3).Info("INFO ", fmt.Sprintf("No internal resource found with name or alias \"%s\"", alias))
-	return alias, "", false, fmt.Errorf("no internal resource found with name or alias \"%s\"", alias)
-}
-
 func RetrieveKindGroupFromCRDS(koff *types.KoffCommand, alias string) (string, string, error) {
 	if koff.IsEtcdDb {
 		aliasFields, ok := koff.EtcdAliasToCrdKubeKey[alias]
@@ -279,34 +170,69 @@ func RetrieveKindGroupFromCRDS(koff *types.KoffCommand, alias string) (string, s
 			return strings.ToLower(aliasFields.Kind), aliasFields.Group, nil
 		}
 		return alias, "", fmt.Errorf("no customResource found with name or alias \"%s\"in etcd db: ", alias)
-	} else {
-		home, _ := os.UserHomeDir()
-		crdsPath := home + "/.koff/customresourcedefinitions/"
+	}
+	loadCRDsFromDisk(koff)
+	if crd, ok := koff.AliasToCrd[alias]; ok {
+		return strings.ToLower(crd.Spec.Names.Kind), crd.Spec.Group, nil
+	}
+	return alias, "", fmt.Errorf("no customResource found with name or alias \"%s\"", alias)
+}
 
-		_, err := Exists(crdsPath)
+// loadCRDsFromDisk reads every CRD under ~/.koff/customresourcedefinitions once
+// and registers all of its aliases (kind, plural, singular, short names and
+// singular.group) into koff.AliasToCrd. Subsequent calls are no-ops.
+func loadCRDsFromDisk(koff *types.KoffCommand) {
+	if koff.CRDsLoaded {
+		return
+	}
+	koff.CRDsLoaded = true
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		klog.V(1).ErrorS(err, "ERROR resolving home directory")
+		return
+	}
+	crdsPath := filepath.Join(home, ".koff", "customresourcedefinitions")
+	crds, err := os.ReadDir(crdsPath)
+	if err != nil {
+		klog.V(4).Info("INFO ", fmt.Sprintf("could not read CRD directory %q: %v", crdsPath, err))
+		return
+	}
+	for _, f := range crds {
+		crdByte, err := os.ReadFile(filepath.Join(crdsPath, f.Name()))
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err.Error())
-			os.Exit(1)
+			continue
 		}
-		crds, _ := ioutil.ReadDir(crdsPath)
-		for _, f := range crds {
-			crdYamlPath := crdsPath + f.Name()
-			crdByte, _ := ioutil.ReadFile(crdYamlPath)
-			_crd := &apiextensionsv1beta1.CustomResourceDefinition{}
-			if err := yaml.Unmarshal([]byte(crdByte), &_crd); err != nil {
+		crd := &apiextensionsv1beta1.CustomResourceDefinition{}
+		if err := yaml.Unmarshal(crdByte, crd); err != nil {
+			continue
+		}
+		entry := apiextensionsv1beta1.CustomResourceDefinition{Spec: crd.Spec}
+		aliases := []string{
+			strings.ToLower(crd.Spec.Names.Kind),
+			strings.ToLower(crd.Spec.Names.Plural),
+			strings.ToLower(crd.Spec.Names.Singular),
+			crd.Spec.Names.Singular + "." + crd.Spec.Group,
+		}
+		aliases = append(aliases, crd.Spec.Names.ShortNames...)
+		for _, a := range aliases {
+			if a == "" || a == "." {
 				continue
 			}
-			koff.AliasToCrd[strings.ToLower(_crd.Spec.Names.Kind)] = apiextensionsv1beta1.CustomResourceDefinition{Spec: _crd.Spec}
-			if strings.ToLower(_crd.Spec.Names.Kind) == alias || strings.ToLower(_crd.Spec.Names.Plural) == alias || strings.ToLower(_crd.Spec.Names.Singular) == alias || StringInSlice(alias, _crd.Spec.Names.ShortNames) || _crd.Spec.Names.Singular+"."+_crd.Spec.Group == alias {
-				koff.AliasToCrd[alias] = apiextensionsv1beta1.CustomResourceDefinition{Spec: _crd.Spec}
-				klog.V(4).Info("INFO ", fmt.Sprintf("Alias  \"%s\" found in path \"%s\".", alias, crdYamlPath))
-				return strings.ToLower(_crd.Spec.Names.Kind), _crd.Spec.Group, nil
-			}
-			klog.V(5).Info("INFO ", fmt.Sprintf("Alias \"%s\" not found in path \"%s\".", alias, crdYamlPath))
+			koff.AliasToCrd[strings.ToLower(a)] = entry
 		}
-		klog.V(4).Info("INFO ", fmt.Sprintf("No customResource found with name or alias \"%s\" in path: \"%s\".", alias, crdsPath))
-		return alias, "", fmt.Errorf("no customResource found with name or alias \"%s\"in path: \"%s\"", alias, crdsPath)
 	}
+}
+
+// etcdCoreStoragePath maps a core-group resource's plural name to the path
+// segment actually used under /kubernetes.io/ in etcd, for the historical cases
+// where the storage name differs from the plural:
+//   - nodes are stored under "minions" (legacy name)
+//   - services / endpoints live under "services/specs" and "services/endpoints"
+var etcdCoreStoragePath = map[string]string{
+	"nodes":     "minions",
+	"services":  "services/specs",
+	"endpoints": "services/endpoints",
 }
 
 func EtcdPrefixFromAlias(koff *types.KoffCommand, alias string, resourceName string) (string, error) {
@@ -321,13 +247,11 @@ func EtcdPrefixFromAlias(koff *types.KoffCommand, alias string, resourceName str
 			etcdPrefixResource = "/openshift.io/" + resourceGroup + "/" + resourceNamePlural
 		} else {
 			if resourceGroup == "core" || resourceGroup == "events.k8s.io" || resourceGroup == "apps" {
-				if resourceNamePlural == "services" {
-					etcdPrefixResource = "/kubernetes.io/services/specs"
-				} else if resourceNamePlural == "endpoints" {
-					etcdPrefixResource = "/kubernetes.io/services/endpoints"
-				} else {
-					etcdPrefixResource = "/kubernetes.io/" + resourceNamePlural
+				segment := resourceNamePlural
+				if override, ok := etcdCoreStoragePath[resourceNamePlural]; ok {
+					segment = override
 				}
+				etcdPrefixResource = "/kubernetes.io/" + segment
 			} else {
 				etcdPrefixResource = "/kubernetes.io/" + resourceGroup + "/" + resourceNamePlural
 			}
@@ -360,72 +284,4 @@ func EtcdPrefixFromAlias(koff *types.KoffCommand, alias string, resourceName str
 		}
 	}
 	return "", fmt.Errorf("alias \"%s\" not identified as any known resource or custom resource", alias)
-}
-
-func StringInSlice(a string, list []string) bool {
-	for _, b := range list {
-		if b == a {
-			return true
-		}
-	}
-	return false
-}
-
-// Generate random alphanumeric string
-// https://stackoverflow.com/a/31832326
-var src = rand.NewSource(time.Now().UnixNano())
-
-const letterBytes = "1234567890"
-const (
-	letterIdxBits = 6                    // 6 bits to represent a letter index
-	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-)
-
-func RandStringBytes(n int) string {
-	b := make([]byte, n)
-	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
-	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
-		if remain == 0 {
-			cache, remain = src.Int63(), letterIdxMax
-		}
-		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
-			b[i] = letterBytes[idx]
-			i--
-		}
-		cache >>= letterIdxBits
-		remain--
-	}
-
-	return *(*string)(unsafe.Pointer(&b))
-}
-
-func IsDirectory(path string) (bool, error) {
-	fileInfo, err := os.Stat(path)
-	if err != nil {
-		return false, err
-	}
-
-	return fileInfo.IsDir(), err
-}
-
-// CONSTS
-const charset = "abcdefghijklmnopqrstuvwxyz" +
-	"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-
-// VARS
-var seededRand *rand.Rand = rand.New(
-	rand.NewSource(time.Now().UnixNano()))
-
-// FUNCS
-func StringWithCharset(length int, charset string) string {
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[seededRand.Intn(len(charset))]
-	}
-	return string(b)
-}
-
-func RandString(length int) string {
-	return StringWithCharset(length, charset)
 }

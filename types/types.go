@@ -57,7 +57,7 @@ func NewKoffCommand() *KoffCommand {
 	koff.GetArgs = make(map[string]map[string]struct{})
 	koff.AliasToCrd = make(map[string]apiextensionsv1.CustomResourceDefinition)
 	koff.ArgPresent = make(map[string]bool)
-	koff.KnownResources = make(map[string]map[string]interface{})
+	koff.KnownResources = make(map[string]map[string]any)
 	koff.KubeKeysToEtcdKeys = make(map[string][]byte)
 	koff.EtcdAliasToCrdKubeKey = make(map[string]AliasSubField)
 	_ = yaml.Unmarshal(yamlData, koff.KnownResources)
@@ -88,9 +88,11 @@ type KoffCommand struct {
 	GetArgs           map[string]map[string]struct{}
 	AliasToCrd        map[string]apiextensionsv1.CustomResourceDefinition
 	ArgPresent        map[string]bool
-	IsBundle          bool
 	IsEtcdDb          bool
-	KnownResources    map[string]map[string]interface{}
+	// CRDsLoaded records whether CRDs have been read from ~/.koff once already,
+	// so RetrieveKindGroupFromCRDS does not re-scan the directory per alias.
+	CRDsLoaded     bool
+	KnownResources map[string]map[string]any
 	// when parsing etcd db
 	EtcdAliasToCrdKubeKey map[string]AliasSubField
 	KubeKeysToEtcdKeys    map[string][]byte
@@ -183,7 +185,6 @@ type Config struct {
 
 type InUse struct {
 	Path      string `json:"path"`
-	IsBundle  bool   `json:"isBundle"`
 	IsEtcdDb  bool   `json:"isEtcDb"`
 	Namespace string `json:"namespace"`
 }
