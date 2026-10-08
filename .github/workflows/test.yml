@@ -2,24 +2,28 @@ name: Test
 
 on:
   push:
-    branches: [ "test" ]
+    branches: [ "main", "test" ]
   pull_request:
-    branches: [ "test" ]
+    branches: [ "main", "test" ]
 
 jobs:
 
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v5
       with:
-        go-version: 1.19
+        go-version: "1.19"
+        cache: true
 
     - name: Build
       run: go build -v ./...
 
+    - name: Vet
+      run: go vet ./...
+
     - name: Test
-      run: go test -v ./...
+      run: go test -race -v ./...
