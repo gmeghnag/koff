@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/coreos/go-semver/semver"
 	"github.com/gmeghnag/koff/vars"
 	"github.com/spf13/cobra"
 )
@@ -33,22 +32,29 @@ func upgradeBinary(repoName string) {
 	if err != nil {
 		panic(err)
 	}
-	koffExecutablePath := filepath.Dir(ex) + "/koff"
+	koffExecutablePath := filepath.Join(filepath.Dir(ex), filepath.Base(ex))
 	operatingSystem := runtime.GOOS
 	if DesiredVersion == "" {
-		checkReleases(repoName)
+		if err := checkReleases(repoName); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
-	if DesiredVersion != "latest" && string(DesiredVersion[0]) != "v" {
-		fmt.Fprintln(os.Stderr, "error: --to must be a semantic version (e.g. v4.0.5): No Major.Minor.Patch elements found")
-		os.Exit(1)
-	}
 	if DesiredVersion != "latest" {
-		desiredReleaseVer := semver.New(DesiredVersion[1:])
+		desiredReleaseVer, err := parseTag(DesiredVersion)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error: --to must be a semantic version (e.g. v4.0.5): No Major.Minor.Patch elements found")
+			os.Exit(1)
+		}
 		if vars.KoffTag == "" {
 			vars.KoffTag = "v0.9.1"
 		}
-		currentVer := semver.New(vars.KoffTag[1:])
+		currentVer, err := parseTag(vars.KoffTag)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
 		if desiredReleaseVer.LessThan(*currentVer) {
 			fmt.Fprintln(os.Stderr, "error: The update "+DesiredVersion+" is not one of the available updates (check them by running \"koff upgrade\")")
 			os.Exit(1)

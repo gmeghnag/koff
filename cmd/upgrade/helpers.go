@@ -19,10 +19,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-semver/semver"
@@ -31,7 +32,7 @@ import (
 )
 
 type Releases []Release
-type Release map[string]interface{}
+type Release map[string]any
 
 func updateKoffExecutable(koffExecutablePath string, url string, desiredVersion string) (err error) {
 	req, err := http.NewRequest("GET", url, nil)
@@ -47,61 +48,102 @@ func updateKoffExecutable(koffExecutablePath string, url string, desiredVersion 
 	}
 	defer resp.Body.Close()
 
-	err = os.Remove(koffExecutablePath)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	f, err := os.OpenFile(koffExecutablePath, os.O_CREATE|os.O_WRONLY, 0777)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
 	//bar := progressbar.Default(-1, "")
 	bar := CustomBytes(desiredVersion,
 		resp.ContentLength,
 		"upgrading",
 	)
 
-	_, err = io.Copy(io.MultiWriter(f, bar), resp.Body)
+	// Stream the download through the progress bar and install it atomically so
+	// a failed or interrupted download never leaves the user without a working
+	// binary.
+	return installBinary(koffExecutablePath, io.TeeReader(resp.Body, bar))
+}
+
+// installBinary writes src to a temporary file next to dest and atomically
+// renames it into place with executable permissions. If writing fails, dest is
+// left untouched and the temporary file is removed.
+func installBinary(dest string, src io.Reader) error {
+	dir := filepath.Dir(dest)
+	tmp, err := os.CreateTemp(dir, ".koff-download-*")
 	if err != nil {
 		return err
 	}
-	return nil
+	tmpName := tmp.Name()
+	// Best-effort cleanup; on success the file has already been renamed away.
+	defer os.Remove(tmpName)
+
+	if _, err := io.Copy(tmp, src); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(0o755); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, dest)
 }
 
-func checkReleases(repoName string) {
+func checkReleases(repoName string) error {
 	resp, err := http.Get("https://api.github.com/repos/" + repoName + "/releases")
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body) // response body is []byte
+	body, err := io.ReadAll(resp.Body) // response body is []byte
 	if err != nil {
-		panic(err)
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("unexpected response %d from GitHub releases API: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var koffReleases Releases
-	err = json.Unmarshal(body, &koffReleases)
-	if err != nil {
-		panic(err)
+	if err := json.Unmarshal(body, &koffReleases); err != nil {
+		return fmt.Errorf("could not parse GitHub releases response: %w", err)
 	}
 
 	if vars.KoffTag == "" {
 		vars.KoffTag = "v0.9.1"
 	}
+	currentVer, err := parseTag(vars.KoffTag)
+	if err != nil {
+		return err
+	}
 	fmt.Println("koff version is " + vars.KoffTag)
 	fmt.Println("")
 	fmt.Println("Available updates:")
 	fmt.Println("")
-	currentVer := semver.New(vars.KoffTag[1:])
 	for _, release := range koffReleases {
-		availableRelease := release["tag_name"].(string)
-		availableReleaseVer := semver.New(availableRelease[1:])
+		tag, ok := release["tag_name"].(string)
+		if !ok {
+			continue
+		}
+		availableReleaseVer, err := parseTag(tag)
+		if err != nil {
+			// Skip releases whose tag is not a valid vX.Y.Z semver.
+			continue
+		}
 		if currentVer.LessThan(*availableReleaseVer) {
-			fmt.Println(availableRelease)
+			fmt.Println(tag)
 		}
 	}
+	return nil
+}
+
+// parseTag parses a "vX.Y.Z" release tag into a semantic version, returning an
+// error instead of panicking on malformed input.
+func parseTag(tag string) (*semver.Version, error) {
+	if len(tag) < 2 || tag[0] != 'v' {
+		return nil, fmt.Errorf("invalid version tag %q: expected form vX.Y.Z", tag)
+	}
+	v, err := semver.NewVersion(tag[1:])
+	if err != nil {
+		return nil, fmt.Errorf("invalid version tag %q: %w", tag, err)
+	}
+	return v, nil
 }
 
 func CustomBytes(desiredVersion string, maxBytes int64, description ...string) *progressbar.ProgressBar {
