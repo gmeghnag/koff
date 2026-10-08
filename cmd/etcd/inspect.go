@@ -17,10 +17,9 @@ package etcd
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"hash/crc32"
+	"io"
 	"os"
 	"strings"
 
@@ -32,8 +31,6 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-var output bytes.Buffer
-
 const (
 	StorageBinaryMediaType = "application/vnd.kubernetes.storagebinary"
 	ProtobufMediaType      = "application/vnd.kubernetes.protobuf"
@@ -41,51 +38,52 @@ const (
 	JsonMediaType          = "application/json"
 )
 
-var (
-	keyName, formatOutput string
-)
+var formatOutput string
 
 var Inspect = &cobra.Command{
 
 	Use:   "inspect",
 	Short: "Inspect resources from etcd db (or snapshot) file.",
 	Long:  "Select the etcd db file to inspect:\n\n  koff etcd inspect <filename> [<etcd_api_key>]",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
 			cmd.Help()
 			os.Exit(1)
 		}
-		inspectEtcd(args)
+		return inspectEtcd(args, os.Stdout)
 	},
 }
+
+// errStopIteration is a sentinel used to break out of bolt's ForEach once the
+// requested key has been found; it is swallowed by the caller.
+var errStopIteration = fmt.Errorf("stop iteration")
 
 func init() {
 	Inspect.PersistentFlags().StringVarP(&formatOutput, "output", "o", "json", "Output format. One of: json|yaml")
 }
 
-func inspectEtcd(args []string) error {
+func inspectEtcd(args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("expected at least one argument: etcd db file path.")
+		return fmt.Errorf("expected at least one argument: etcd db file path")
 	}
 	dbPath := args[0]
 
+	key := ""
 	if len(args) > 1 {
-		keyName = args[1]
+		key = args[1]
 	}
 	if _, err := os.Stat(dbPath); err != nil {
 		return err
 	}
 
-	db, err := bolt.Open(dbPath, 0400, &bolt.Options{ReadOnly: false})
+	// Snapshots must never be mutated: open the file strictly read-only.
+	db, err := bolt.Open(dbPath, 0400, &bolt.Options{ReadOnly: true})
 	if err != nil {
-		fmt.Println("error trying to read", dbPath, "as boltdb file.")
-		return err
+		return fmt.Errorf("error trying to read %q as boltdb file: %w", dbPath, err)
 	}
 	defer db.Close()
 
-	h := crc32.New(crc32.MakeTable(crc32.Castagnoli))
-
-	if err = db.View(func(tx *bolt.Tx) error {
+	return db.View(func(tx *bolt.Tx) error {
 		// check snapshot file integrity first
 		var dbErrStrings []string
 		for dbErr := range tx.Check() {
@@ -94,107 +92,73 @@ func inspectEtcd(args []string) error {
 		if len(dbErrStrings) > 0 {
 			return fmt.Errorf("snapshot file integrity check failed. %d errors found.\n"+strings.Join(dbErrStrings, "\n"), len(dbErrStrings))
 		}
-		c := tx.Cursor()
-		//var out string
-		for next, _ := c.First(); next != nil; next, _ = c.Next() {
-			if string(next) == "key" {
-				b := tx.Bucket(next)
-				if b == nil {
-					return fmt.Errorf("cannot get hash of bucket %s", string(next))
-				}
-				if _, err := h.Write(next); err != nil {
-					return fmt.Errorf("cannot write bucket %s : %v", string(next), err)
-				}
+		b := tx.Bucket([]byte("key"))
+		if b == nil {
+			return fmt.Errorf("bucket %q not found in %q", "key", dbPath)
+		}
 
-				err = b.ForEach(func(key, value []byte) error {
-					var kv mvccpb.KeyValue
-					if err := kv.Unmarshal(value); err != nil {
-						panic(err)
-					}
-					if keyName != "" {
-						if string(kv.Key) == keyName {
-							unstruct := &unstructured.Unstructured{}
-							err := unstruct.UnmarshalJSON(kv.Value)
-							if err == nil {
-								if formatOutput == "json" {
-									data, _ := json.MarshalIndent(unstruct, "", "  ")
-									data = append(data, '\n')
-									fmt.Printf("%s", data)
-									return nil
-								} else if formatOutput == "yaml" {
-									data, _ := yaml.Marshal(unstruct)
-									fmt.Printf("%s", data)
-								}
-
-							}
-							if formatOutput == "json" {
-								_, err = DetectAndConvert(JsonMediaType, kv.Value, &output)
-								err := unstruct.UnmarshalJSON(output.Bytes())
-								if err == nil {
-									data, _ := json.MarshalIndent(unstruct, "", "  ")
-									data = append(data, '\n')
-									fmt.Printf("%s", data)
-									return nil
-								}
-							} else if formatOutput == "yaml" {
-								_, err = DetectAndConvert(YamlMediaType, kv.Value, &output)
-								fmt.Printf("%s", &output)
-							}
-							os.Exit(0)
-						}
-					} else {
-						fmt.Println(string(kv.Key))
-					}
-					return nil
-				})
+		found := false
+		iterErr := b.ForEach(func(_, value []byte) error {
+			var kv mvccpb.KeyValue
+			if err := kv.Unmarshal(value); err != nil {
+				return fmt.Errorf("unmarshalling etcd value: %w", err)
 			}
+			if key == "" {
+				fmt.Fprintln(out, string(kv.Key))
+				return nil
+			}
+			if string(kv.Key) != key {
+				return nil
+			}
+			found = true
+			if err := renderEtcdValue(kv.Value, formatOutput, out); err != nil {
+				return err
+			}
+			return errStopIteration
+		})
+		if iterErr != nil && iterErr != errStopIteration {
+			return iterErr
+		}
+		if key != "" && !found {
+			return fmt.Errorf("key %q not found", key)
 		}
 		return nil
-	}); err != nil {
+	})
+}
+
+// renderEtcdValue decodes a raw etcd value (either stored JSON, e.g. CRDs, or
+// Kubernetes protobuf) into an unstructured object and writes it to out in the
+// requested format ("json" or "yaml").
+func renderEtcdValue(raw []byte, format string, out io.Writer) error {
+	u := &unstructured.Unstructured{}
+	if err := u.UnmarshalJSON(raw); err == nil {
+		return renderUnstructured(u, format, out)
+	}
+	var buf bytes.Buffer
+	if _, err := DetectAndConvert(JsonMediaType, raw, &buf); err != nil {
 		return err
 	}
-
-	return nil
-}
-
-type HelpType struct {
-	Header map[string]string `json:"headers"`
-	Kvs    []etcdObject      `json:"kvs"`
-	Count  int               `json:"count"`
-}
-
-type etcdObject struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
-type KeyValue struct {
-	// key is the key in bytes. An empty key is not allowed.
-	Key   []byte
-	Value []byte
-}
-
-func keyDecoder(k, v []byte) {
-	rev := bytesToRev(k)
-	var kv mvccpb.KeyValue
-	if err := kv.Unmarshal(v); err != nil {
-		panic(err)
+	if err := u.UnmarshalJSON(buf.Bytes()); err != nil {
+		return err
 	}
-	fmt.Printf("rev=%+v, value=[key %q | val %q | created %d | mod %d | ver %d]\n", rev, string(kv.Key), string(kv.Value), kv.CreateRevision, kv.ModRevision, kv.Version)
+	return renderUnstructured(u, format, out)
 }
 
-func bytesToRev(bytes []byte) revision {
-	return revision{
-		main: int64(binary.BigEndian.Uint64(bytes[0:8])),
-		sub:  int64(binary.BigEndian.Uint64(bytes[9:])),
+func renderUnstructured(u *unstructured.Unstructured, format string, out io.Writer) error {
+	switch format {
+	case "yaml":
+		data, err := yaml.Marshal(u)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(out, "%s", data)
+		return err
+	default: // json
+		data, err := json.MarshalIndent(u, "", "  ")
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(out, "%s\n", data)
+		return err
 	}
-}
-
-type revision struct {
-	main int64
-	sub  int64
-}
-
-type R struct {
-	ApiVersion string `json:"apiversion"`
 }

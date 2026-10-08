@@ -183,8 +183,9 @@ func newCodec(typeMeta *runtime.TypeMeta, mediaType string) (runtime.Codec, erro
 	if mediaType == StorageBinaryMediaType {
 		mediaType = ProtobufMediaType
 	}
-	//var Koff = types.NewKoffCommand()
-	var Codecs = serializer.NewCodecFactory(Scheme)
+	// Reuse the package-level CodecFactory (built once from the immutable Scheme).
+	// It is safe for concurrent use: it is never mutated and the codecs are
+	// derived without touching shared state.
 	mediaTypes := Codecs.SupportedMediaTypes()
 
 	info, ok := runtime.SerializerInfoForMediaType(mediaTypes, mediaType)
